@@ -255,7 +255,7 @@
                     const popup = window.open(oauthRedirectUrl, 'oauth_popup', 'width=600,height=700,scrollbars=yes,resizable=yes');
                     
                     // Check if popup was blocked
-                    if (!popup || popup.closed || typeof popup.closed == 'undefined') {
+                    if (!popup) {
                         alert('Popup blocked! Please allow popups for this site and try again, or click the link below to open manually.');
                         // Fallback: show the URL
                         document.getElementById('oauth-modal-description').innerHTML = `
@@ -265,17 +265,15 @@
                             </a>
                         `;
                     } else {
-                        // Monitor popup for completion
-                        const checkClosed = setInterval(() => {
-                            if (popup.closed) {
-                                clearInterval(checkClosed);
-                                closeOAuthModal();
-                                // Check if account was updated successfully
-                                setTimeout(() => {
-                                    window.location.reload();
-                                }, 1000);
-                            }
-                        }, 1000);
+                        // Use a more robust approach - reload the current window after a delay
+                        // This avoids COOP issues with popup.closed
+                        setTimeout(() => {
+                            closeOAuthModal();
+                            // Reload the page after a reasonable delay
+                            setTimeout(() => {
+                                window.location.reload();
+                            }, 2000);
+                        }, 3000);
                     }
                 }
             };

@@ -48,7 +48,7 @@ class GoogleTaskController extends Controller
             });
         }
 
-        $googleTasks = $query->orderBy('created_at', 'desc')->paginate(20);
+        $googleTasks = $query->orderBy('due_date', 'desc')->paginate(20);
         $taskLists = auth()->user()->googleTasks()
             ->select('list_id', 'list_name')
             ->whereNotNull('list_id')

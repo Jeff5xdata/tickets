@@ -4,9 +4,14 @@
             <h2 class="font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight">
                 {{ __('Email Accounts') }}
             </h2>
-            <a href="{{ route('email-accounts.create') }}" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
-                Add Email Account
-            </a>
+            <div class="flex space-x-2">
+                <a href="{{ route('email-accounts.signatures.index') }}" class="bg-indigo-500 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded">
+                    Manage Signatures
+                </a>
+                <a href="{{ route('email-accounts.create') }}" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+                    Add Email Account
+                </a>
+            </div>
         </div>
     </x-slot>
 

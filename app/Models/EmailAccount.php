@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Storage;
 
 class EmailAccount extends Model
 {
@@ -31,6 +32,8 @@ class EmailAccount extends Model
         'smtp_username',
         'smtp_password',
         'is_active',
+        'signature_text',
+        'signature_image_path',
     ];
 
     protected $casts = [
@@ -61,6 +64,11 @@ class EmailAccount extends Model
         return $this->hasMany(EmailRule::class);
     }
 
+    public function calendarEvents(): HasMany
+    {
+        return $this->hasMany(CalendarEvent::class);
+    }
+
     public function isTokenExpired(): bool
     {
         return $this->token_expires_at && $this->token_expires_at->isPast();
@@ -81,5 +89,50 @@ class EmailAccount extends Model
             'username' => $this->imap_username,
             'password' => $this->imap_password,
         ];
+    }
+
+    public function hasSignature(): bool
+    {
+        return !empty($this->signature_text) || !empty($this->signature_image_path);
+    }
+
+    public function getSignatureText(): ?string
+    {
+        return $this->signature_text;
+    }
+
+    public function getSignatureImageUrl(): ?string
+    {
+        return $this->signature_image_path ? Storage::url($this->signature_image_path) : null;
+    }
+
+    public function getSignatureHtml(): string
+    {
+        $html = '';
+        
+        if ($this->signature_text) {
+            $html .= '<div class="signature-text">' . $this->signature_text . '</div>';
+        }
+        
+        if ($this->signature_image_path) {
+            $html .= '<div class="signature-image"><img src="' . Storage::url($this->signature_image_path) . '" alt="Signature" style="max-width: 300px;"></div>';
+        }
+        
+        return $html;
+    }
+
+    public function getFormattedSignature(): string
+    {
+        $signature = '';
+        
+        if ($this->signature_text) {
+            $signature .= $this->signature_text;
+        }
+        
+        if ($this->signature_image_path) {
+            $signature .= "\n[Signature Image: " . basename($this->signature_image_path) . "]";
+        }
+        
+        return $signature;
     }
 }

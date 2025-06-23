@@ -1,6 +1,6 @@
 # Email-Based Ticket Management System
 
-A comprehensive Laravel-based email ticket management system with AI-powered features, Google Tasks integration, and automated email processing.
+A comprehensive Laravel-based email ticket management system with AI-powered features, Google Tasks integration, calendar management, push notifications, and automated email processing.
 
 ## 🚀 Features
 
@@ -10,6 +10,7 @@ A comprehensive Laravel-based email ticket management system with AI-powered fea
 -   **Multi-Account Support**: Connect multiple email accounts (Gmail, Outlook, IMAP)
 -   **Dark Mode**: Full dark/light mode toggle with persistent preferences
 -   **Responsive Design**: Mobile-friendly interface built with Tailwind CSS
+-   **Progressive Web App (PWA)**: Installable app with offline support and push notifications
 
 ### AI-Powered Features
 
@@ -28,6 +29,15 @@ A comprehensive Laravel-based email ticket management system with AI-powered fea
 -   **Parent-Child Tasks**: Create subtasks and organize task hierarchies
 -   **Task Duplication**: Duplicate existing tasks for similar workflows
 
+### Calendar Integration
+
+-   **Multi-Provider Support**: Google Calendar, Microsoft Outlook, and iCal calendars
+-   **Event Management**: Create, edit, and delete calendar events
+-   **Calendar Sync**: Automatic synchronization with external calendars
+-   **Event Details**: Rich event information including attendees, location, and recurrence
+-   **Calendar Selection**: Choose from multiple calendars per account
+-   **All-Day Events**: Support for all-day and timed events
+
 ### Email Automation
 
 -   **Email Rules**: Create automated rules for email processing
@@ -35,12 +45,29 @@ A comprehensive Laravel-based email ticket management system with AI-powered fea
 -   **Filtering**: Filter emails by sender, subject, or content
 -   **Forwarding**: Automatically forward emails based on rules
 
+### Email Signatures
+
+-   **Rich Text Signatures**: Create professional signatures with formatting
+-   **Image Signatures**: Add logos and signature images to emails
+-   **Per-Account Signatures**: Different signatures for different email accounts
+-   **Live Preview**: See how signatures will appear in emails
+-   **Signature Management**: Easy signature creation and editing interface
+
+### Push Notifications
+
+-   **Real-time Notifications**: Receive notifications for new tickets
+-   **Cross-platform**: Works on desktop and mobile browsers
+-   **Offline Support**: Notifications work even when app is closed
+-   **Rich Notifications**: Include ticket details and actions
+-   **User Control**: Enable/disable notifications per user
+
 ### Advanced Features
 
 -   **Notes System**: Add internal and public notes to tickets
 -   **Reply Management**: Send replies with original email context
 -   **Bulk Operations**: Bulk update ticket status and priority
 -   **Search & Filter**: Advanced search and filtering capabilities
+-   **File Attachments**: Support for email attachments with metadata
 -   **Auto-Save**: Automatic saving of task drafts while editing
 -   **Task Hierarchies**: Create parent-child task relationships
 -   **Task Duplication**: Duplicate tasks for similar workflows
@@ -53,6 +80,7 @@ A comprehensive Laravel-based email ticket management system with AI-powered fea
 -   **Node.js**: 18+ and NPM
 -   **Composer**: Latest version
 -   **Web Server**: Apache/Nginx
+-   **SSL Certificate**: Required for PWA and push notifications
 
 ## 🛠️ Installation
 
@@ -115,6 +143,11 @@ MICROSOFT_REDIRECT_URI=https://yourdomain.com/email-accounts/microsoft/callback
 GEMINI_API_KEY=your_gemini_api_key
 GEMINI_ENABLED=true
 
+# Push Notifications (VAPID)
+VAPID_SUBJECT=mailto:your-email@example.com
+VAPID_PUBLIC_KEY=your_vapid_public_key
+VAPID_PRIVATE_KEY=your_vapid_private_key
+
 # Mail Configuration
 MAIL_MAILER=smtp
 MAIL_HOST=your_smtp_host
@@ -124,6 +157,9 @@ MAIL_PASSWORD=your_password
 MAIL_ENCRYPTION=tls
 MAIL_FROM_ADDRESS=your_email
 MAIL_FROM_NAME="${APP_NAME}"
+
+# File Storage
+FILESYSTEM_DISK=local
 ```
 
 ### 5. Database Setup
@@ -136,7 +172,20 @@ php artisan migrate
 php artisan db:seed
 ```
 
-### 6. Build Assets
+### 6. Generate VAPID Keys for Push Notifications
+
+```bash
+php artisan vapid:generate
+```
+
+### 7. Set Up File Storage
+
+```bash
+# Create storage link for public access
+php artisan storage:link
+```
+
+### 8. Build Assets
 
 ```bash
 # Build for production
@@ -146,7 +195,7 @@ npm run build
 npm run dev
 ```
 
-### 7. Set Up Cron Jobs
+### 9. Set Up Cron Jobs
 
 Add the following to your server's crontab for automated email checking:
 
@@ -172,6 +221,7 @@ chmod +x setup_cron.sh
 
     - Gmail API
     - Google Tasks API
+    - Google Calendar API
     - Google+ API
 
 3. **Create OAuth 2.0 Credentials**
@@ -198,6 +248,7 @@ chmod +x setup_cron.sh
         - `Mail.Read`
         - `Mail.Send`
         - `Tasks.ReadWrite`
+        - `Calendars.ReadWrite`
         - `offline_access`
 
 3. **Set Redirect URIs**
@@ -234,8 +285,18 @@ chmod +x setup_cron.sh
     - Complete OAuth authentication or enter IMAP details
 
 3. **Set Up Email Rules (Optional)**
+
     - Go to "Email Rules" in settings
     - Create rules for automatic email processing
+
+4. **Enable Push Notifications**
+
+    - Click "Enable Notifications" in the PWA status component
+    - Grant notification permission when prompted
+
+5. **Install as PWA (Optional)**
+    - Click the install button in the navigation or browser
+    - The app will be installed on your device
 
 ### Managing Tickets
 
@@ -257,6 +318,48 @@ chmod +x setup_cron.sh
     - Use the reply form
     - Include original email context if needed
     - Send reply through connected email account
+
+### Calendar Management
+
+1. **Sync Calendars**
+
+    - Go to "Calendar Events" in the navigation
+    - Click "Sync All Calendars" to sync with external calendars
+    - View all events from connected calendar accounts
+
+2. **Create Events**
+
+    - Click "Create Event" in the calendar events page
+    - Select the calendar account and specific calendar
+    - Fill in event details including title, description, location, and time
+    - Add attendees if needed
+
+3. **Manage Events**
+
+    - View event details with rich information
+    - Edit events with automatic sync to external calendars
+    - Delete events (syncs with external calendar)
+    - Filter events by provider, date range, and status
+
+### Email Signatures
+
+1. **Access Signature Management**
+
+    - Go to "Email Accounts" → "Manage Signatures"
+    - Or click on an email account and use the "Email Signature" section
+
+2. **Create Signatures**
+
+    - Use the rich text editor for formatted signatures
+    - Upload signature images (JPEG, PNG, JPG, GIF, max 2MB)
+    - Preview how signatures will appear in emails
+    - Save signatures per email account
+
+3. **Manage Signatures**
+
+    - Edit existing signatures
+    - Remove text or image components
+    - View signature status for all accounts
 
 ### AI Features
 
@@ -335,6 +438,12 @@ Create rules to automatically:
 -   Built with Tailwind CSS
 -   Customize styles in `resources/css/app.css`
 
+### PWA Customization
+
+-   Update app icons in `public/images/`
+-   Modify manifest in `public/manifest.json`
+-   Customize service worker in `public/sw.js`
+
 ## 🚀 Deployment
 
 ### Production Setup
@@ -359,7 +468,7 @@ Create rules to automatically:
 3. **Web Server**
 
     - Configure Apache/Nginx to point to `public/` directory
-    - Set up SSL certificates
+    - Set up SSL certificates (required for PWA and push notifications)
     - Configure proper file permissions
 
 4. **Database**
@@ -382,6 +491,8 @@ docker-compose up -d
 -   Check email account connections
 -   Review and update email rules
 -   Monitor Google API quotas
+-   Check push notification delivery
+-   Monitor calendar sync status
 
 ### Troubleshooting
 
@@ -400,9 +511,29 @@ docker-compose up -d
     - Review email server logs
 
 3. **Google Tasks Sync Issues**
+
     - Re-authenticate Google Tasks account
     - Check Google Tasks API quotas
     - Verify task list permissions
+
+4. **Push Notification Issues**
+
+    - Verify VAPID keys are correctly set
+    - Check if HTTPS is enabled
+    - Ensure notification permission is granted
+    - Check browser console for errors
+
+5. **Calendar Sync Issues**
+
+    - Re-authenticate calendar accounts
+    - Check calendar API permissions
+    - Verify calendar IDs are correct
+
+6. **PWA Installation Issues**
+    - Ensure HTTPS is enabled
+    - Check if app meets install criteria
+    - Verify service worker is registered
+    - Check manifest.json configuration
 
 ## 📝 API Documentation
 
@@ -411,7 +542,9 @@ The system includes RESTful APIs for:
 -   Ticket management
 -   Email account operations
 -   Google Tasks integration
+-   Calendar events management
 -   Email rules management
+-   Push notification subscriptions
 
 API endpoints are available at `/api/` with proper authentication.
 
@@ -433,11 +566,25 @@ For support and questions:
 
 -   Check the troubleshooting section above
 -   Review the logs in `storage/logs/`
+-   Check the setup documentation files:
+    -   `PWA_SETUP.md` - Progressive Web App setup
+    -   `PUSH_NOTIFICATIONS_SETUP.md` - Push notification configuration
+    -   `SIGNATURE_SETUP.md` - Email signature management
+    -   `EMAIL_CHECKING_SETUP.md` - Email checking configuration
 -   Create an issue in the repository
 
 ## 🔄 Changelog
 
-### Version 1.1.0
+### Version 1.3.0
+
+-   **Calendar Integration**: Full calendar management with Google, Microsoft, and iCal support
+-   **Push Notifications**: Real-time notifications for new tickets with VAPID support
+-   **Progressive Web App**: Installable PWA with offline support and service worker
+-   **Email Signatures**: Rich text and image signature management per email account
+-   **File Attachments**: Enhanced attachment handling with metadata support
+-   **Enhanced Security**: Improved authorization and file validation
+
+### Version 1.2.0
 
 -   **Auto-Save Feature**: Added automatic draft saving for Google Tasks (saves every 2 seconds)
 -   **Task Hierarchies**: Support for parent-child task relationships and subtasks
@@ -445,15 +592,19 @@ For support and questions:
 -   **Enhanced Task Management**: Improved task editing interface with better validation
 -   **Better Error Handling**: Improved error handling for Google Tasks operations
 
+### Version 1.1.0
+
+-   **Notes System**: Add internal and public notes to tickets
+-   **Reply Management**: Enhanced reply functionality with email context
+-   **Bulk Operations**: Bulk update ticket status and priority
+-   **Advanced Search**: Improved search and filtering capabilities
+
 ### Version 1.0.0
 
--   Initial release
--   Email ticket management
+-   Initial release with core email ticket management
 -   Google Tasks integration
--   AI-powered features
--   Dark mode support
--   OAuth authentication
--   Email automation rules
+-   AI-powered email features
+-   Multi-account email support
 
 ---
 

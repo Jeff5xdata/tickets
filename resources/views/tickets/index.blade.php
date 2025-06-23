@@ -11,6 +11,9 @@
                 <button onclick="fetchEmails()" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
                     Fetch Emails
                 </button>
+                <button onclick="window.location.reload()" class="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded">
+                    Refresh
+                </button>
             </div>
         </div>
     </x-slot>
@@ -93,6 +96,9 @@
                                         </span>
                                         <span class="text-gray-700 dark:text-gray-300">
                                             <strong>Resolved:</strong> {{ $tickets->where('status', 'resolved')->count() }}
+                                        </span>
+                                        <span class="text-gray-700 dark:text-gray-300">
+                                            <strong>Last Updated:</strong> {{ now()->format('M j, Y g:i A') }}
                                         </span>
                                     </div>
                                     <div class="text-gray-700 dark:text-gray-300">
@@ -334,9 +340,4 @@
             }
         }
     </script>
-    <script>
-        setTimeout(function() {
-            window.location.reload();
-        }, 60000); // 60,000 ms = 1 minute
-    </script>
-</x-app-layout> 
+</x-app-layout>

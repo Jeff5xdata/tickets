@@ -2,9 +2,11 @@
 
 namespace App\Providers;
 
+use App\Models\CalendarEvent;
 use App\Models\EmailAccount;
 use App\Models\GoogleTask;
 use App\Models\Ticket;
+use App\Policies\CalendarEventPolicy;
 use App\Policies\EmailAccountPolicy;
 use App\Policies\GoogleTaskPolicy;
 use App\Policies\TicketPolicy;
@@ -18,6 +20,7 @@ class AuthServiceProvider extends ServiceProvider
      * @var array<class-string, class-string>
      */
     protected $policies = [
+        CalendarEvent::class => CalendarEventPolicy::class,
         EmailAccount::class => EmailAccountPolicy::class,
         GoogleTask::class => GoogleTaskPolicy::class,
         Ticket::class => TicketPolicy::class,

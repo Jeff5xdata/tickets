@@ -19,6 +19,10 @@
                     <x-nav-link href="{{ route('google-tasks.index') }}" :active="request()->routeIs('google-tasks.*')" class="dark:text-gray-300 dark:hover:text-white">
                         {{ __('Tasks') }}
                     </x-nav-link>
+
+                    <x-nav-link href="{{ route('calendar-events.index') }}" :active="request()->routeIs('calendar-events.*')" class="dark:text-gray-300 dark:hover:text-white">
+                        {{ __('Calendar') }}
+                    </x-nav-link>
                 </div>
             </div>
 
@@ -32,21 +36,35 @@
                             </svg>
                         </button>
                         <div x-show="open" @click.away="open = false" class="absolute right-0 mt-2 w-48 rounded-md shadow-lg z-50 bg-white dark:bg-gray-800 py-1">
-                            <x-dropdown-link href="{{ route('email-accounts.index') }}" :active="request()->routeIs('email-accounts.*')">
-                                {{ __('Email Accounts') }}
-                            </x-dropdown-link>
                             <x-dropdown-link href="{{ route('email-rules.index') }}" :active="request()->routeIs('email-rules.*')">
                                 {{ __('Email Rules') }}
+                            </x-dropdown-link>
+                            <x-dropdown-link href="{{ route('email-accounts.signatures.index') }}" :active="request()->routeIs('email-accounts.signatures.*')">
+                                {{ __('Email Signatures') }}
+                            </x-dropdown-link>
+                            <x-dropdown-link href="{{ route('email-accounts.index') }}" :active="request()->routeIs('email-accounts.*')">
+                                {{ __('Email Accounts') }}
                             </x-dropdown-link>
                         </div>
                     </div>
                     {{-- END DROPDOWN --}}
 
+                <!-- PWA Install Button -->
+                <button id="pwa-install-button" onclick="window.pwaManager.promptInstall()" class="p-2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors ml-4" style="display: none;" title="Install App">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                    </svg>
+                </button>
 
                 <!-- Dark Mode Toggle -->
-                <button onclick="toggleDarkMode()" class="p-2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors ml-4">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <button onclick="toggleDarkMode()" class="p-2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors ml-4" id="darkModeToggle">
+                    <!-- Moon icon for light mode -->
+                    <svg class="w-5 h-5 dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
+                    </svg>
+                    <!-- Sun icon for dark mode -->
+                    <svg class="w-5 h-5 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path>
                     </svg>
                 </button>
 
@@ -94,6 +112,25 @@
 
             <!-- Hamburger -->
             <div class="-mr-2 flex items-center sm:hidden">
+                <!-- PWA Install Button for Mobile -->
+                <button id="pwa-install-button-mobile" onclick="window.pwaManager.promptInstall()" class="p-2 text-gray-400 dark:text-gray-500 hover:text-gray-500 dark:hover:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:bg-gray-100 dark:focus:bg-gray-700 focus:text-gray-500 dark:focus:text-gray-400 transition duration-150 ease-in-out mr-2" style="display: none;" title="Install App">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                    </svg>
+                </button>
+
+                <!-- Dark Mode Toggle for Mobile -->
+                <button onclick="toggleDarkMode()" class="p-2 text-gray-400 dark:text-gray-500 hover:text-gray-500 dark:hover:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:bg-gray-100 dark:focus:bg-gray-700 focus:text-gray-500 dark:focus:text-gray-400 transition duration-150 ease-in-out mr-2" id="darkModeToggleMobile">
+                    <!-- Moon icon for light mode -->
+                    <svg class="w-5 h-5 dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
+                    </svg>
+                    <!-- Sun icon for dark mode -->
+                    <svg class="w-5 h-5 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path>
+                    </svg>
+                </button>
+                
                 <button @click="open = ! open" class="inline-flex items-center justify-center p-2 rounded-md text-gray-400 dark:text-gray-500 hover:text-gray-500 dark:hover:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:bg-gray-100 dark:focus:bg-gray-700 focus:text-gray-500 dark:focus:text-gray-400 transition duration-150 ease-in-out">
                     <svg class="h-6 w-6" stroke="currentColor" fill="none" viewBox="0 0 24 24">
                         <path :class="{'hidden': open, 'inline-flex': ! open }" class="inline-flex" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
@@ -136,6 +173,10 @@
             
             <x-responsive-nav-link href="{{ route('google-tasks.index') }}" :active="request()->routeIs('google-tasks.*')" class="dark:text-gray-300 dark:hover:text-white">
                 {{ __('Tasks') }}
+            </x-responsive-nav-link>
+            
+            <x-responsive-nav-link href="{{ route('calendar-events.index') }}" :active="request()->routeIs('calendar-events.*')" class="dark:text-gray-300 dark:hover:text-white">
+                {{ __('Calendar') }}
             </x-responsive-nav-link>
         </div>
 

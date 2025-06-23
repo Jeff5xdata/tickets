@@ -71,4 +71,12 @@ return [
         'enabled' => env('GEMINI_ENABLED', false),
     ],
 
+    'webpush' => [
+        'vapid' => [
+            'subject' => env('VAPID_SUBJECT', 'mailto:info@example.com'),
+            'public_key' => env('VAPID_PUBLIC_KEY'),
+            'private_key' => env('VAPID_PRIVATE_KEY'),
+        ],
+    ],
+
 ];

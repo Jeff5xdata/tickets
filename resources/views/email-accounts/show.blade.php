@@ -96,6 +96,46 @@
                 </div>
             </div>
 
+            <!-- Signature Section -->
+            <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg mb-6">
+                <div class="p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-medium text-gray-900 dark:text-white">Email Signature</h3>
+                        <a href="{{ route('email-accounts.signature.edit', $emailAccount) }}" class="bg-indigo-500 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded">
+                            {{ $emailAccount->signature_text || $emailAccount->signature_image_path ? 'Edit Signature' : 'Add Signature' }}
+                        </a>
+                    </div>
+                    
+                    @if($emailAccount->signature_text || $emailAccount->signature_image_path)
+                        <div class="border rounded-lg p-4 bg-gray-50 dark:bg-gray-700">
+                            @if($emailAccount->signature_text)
+                                <div class="mb-3">
+                                    <label class="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Text Signature:</label>
+                                    <div class="text-sm text-gray-900 dark:text-white">{!! $emailAccount->signature_text !!}</div>
+                                </div>
+                            @endif
+                            
+                            @if($emailAccount->signature_image_path)
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Image Signature:</label>
+                                    <img src="{{ Storage::url($emailAccount->signature_image_path) }}" 
+                                         alt="Signature" 
+                                         class="max-w-xs border rounded-lg shadow-sm">
+                                </div>
+                            @endif
+                        </div>
+                    @else
+                        <div class="text-center py-8">
+                            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path>
+                            </svg>
+                            <h3 class="mt-2 text-sm font-medium text-gray-900 dark:text-white">No signature configured</h3>
+                            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Add a signature to automatically include it in your email replies.</p>
+                        </div>
+                    @endif
+                </div>
+            </div>
+
             <!-- Statistics -->
             <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
                 <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">

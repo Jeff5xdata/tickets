@@ -7,11 +7,12 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable;
+    use HasApiTokens, HasFactory, Notifiable;
 
     /**
      * The attributes that are mass assignable.
@@ -65,5 +66,34 @@ class User extends Authenticatable
     public function googleTasks(): HasMany
     {
         return $this->hasMany(GoogleTask::class);
+    }
+
+    public function calendarEvents(): HasMany
+    {
+        return $this->hasMany(CalendarEvent::class);
+    }
+
+    /**
+     * Get the user's push subscriptions.
+     */
+    public function pushSubscriptions()
+    {
+        return $this->hasMany(PushSubscription::class);
+    }
+
+    /**
+     * Route notifications for the broadcast channel.
+     */
+    public function routeNotificationForBroadcast()
+    {
+        return 'user.' . $this->id;
+    }
+
+    /**
+     * Route notifications for the database channel.
+     */
+    public function routeNotificationForDatabase()
+    {
+        return $this->notifications();
     }
 }

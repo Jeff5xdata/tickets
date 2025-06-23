@@ -55,6 +55,13 @@
                                     <button id="reply-button" class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">
                                         Reply to Email
                                     </button>
+                                    <div class="flex items-center space-x-2">
+                                        <button onclick="editSubject()" class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                            </svg>
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -82,8 +89,24 @@
                                 </div>
                                 @if($ticket->html_content)
                                 <div id="ticket-content-html" class="text-gray-700 dark:text-gray-300 hidden" style="word-wrap: break-word;">
-                                    <div class="email-html-content">
-                                        {!! $ticket->html_content !!}
+                                    <div class="email-html-content" style="max-width: 100%; overflow-x: auto;">
+                                        <style>
+                                            .email-html-content img {
+                                                max-width: 100%;
+                                                height: auto;
+                                            }
+                                            .email-html-content * {
+                                                max-width: 100% !important;
+                                            }
+                                            /* Block any remaining cid: URLs */
+                                            .email-html-content img[src^="cid:"] {
+                                                display: none !important;
+                                            }
+                                            .email-html-content *[style*="cid:"] {
+                                                background-image: none !important;
+                                            }
+                                        </style>
+                                        {!! $ticket->getSafeHtmlContent() !!}
                                     </div>
                                 </div>
                                 @endif
@@ -91,8 +114,98 @@
                         </div>
                     </div>
 
+                    <!-- Conversation Thread -->
+                    @if($ticket->replies->count() > 0)
+                    <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg mb-6">
+                        <div class="p-6">
+                            <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Conversation Thread</h3>
+                            
+                            <!-- Original Message -->
+                            <div class="border-l-4 border-blue-500 pl-4 mb-6">
+                                <div class="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
+                                    <div class="flex items-center justify-between mb-3">
+                                        <div class="flex items-center space-x-3">
+                                            <div class="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                                                <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+                                                </svg>
+                                            </div>
+                                            <div>
+                                                <span class="font-medium text-gray-900 dark:text-white">{{ $ticket->from_email }}</span>
+                                                <span class="text-sm text-gray-500 dark:text-gray-400">• {{ $ticket->received_at->format('M j, Y g:i A') }}</span>
+                                            </div>
+                                        </div>
+                                        <span class="text-xs text-gray-500 dark:text-gray-400">Original Message</span>
+                                    </div>
+                                    <div class="text-sm text-gray-700 dark:text-gray-300">
+                                        <div class="font-medium mb-1">Subject: {{ $ticket->subject }}</div>
+                                        <div class="whitespace-pre-line">{{ html_entity_decode(strip_tags($ticket->original_content), ENT_QUOTES | ENT_HTML5, 'UTF-8') }}</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Replies -->
+                            @foreach($ticket->replies->sortBy('sent_at') as $index => $reply)
+                            <div class="ml-8 border-l-2 border-gray-200 dark:border-gray-700 pl-4 mb-4">
+                                <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+                                    <div class="flex items-center justify-between mb-3">
+                                        <div class="flex items-center space-x-3">
+                                            <div class="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
+                                                <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"></path>
+                                                </svg>
+                                            </div>
+                                            <div>
+                                                <span class="font-medium text-gray-900 dark:text-white">{{ $reply->user->name }}</span>
+                                                <span class="text-sm text-gray-500 dark:text-gray-400">• {{ $reply->sent_at->format('M j, Y g:i A') }}</span>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center space-x-2">
+                                            <span class="text-xs text-gray-500 dark:text-gray-400">Reply #{{ $index + 1 }}</span>
+                                            @if($reply->include_original)
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                                                    Original Included
+                                                </span>
+                                            @endif
+                                            @if($reply->reply_to_all)
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+                                                    Reply to All
+                                                </span>
+                                            @endif
+                                        </div>
+                                    </div>
+                                    <div class="text-sm text-gray-700 dark:text-gray-300">
+                                        <div class="font-medium mb-1">To: {{ $reply->to_email }}</div>
+                                        @if($reply->cc_emails && count($reply->cc_emails) > 0)
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">CC: {{ implode(', ', $reply->cc_emails) }}</div>
+                                        @endif
+                                        <div class="font-medium mb-1">Subject: {{ $reply->subject }}</div>
+                                        <div class="whitespace-pre-line">{{ $reply->message }}</div>
+                                        @if($reply->attachments && $reply->attachments->count() > 0)
+                                            <div class="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
+                                                <div class="text-xs text-gray-500 dark:text-gray-400 mb-2">Attachments:</div>
+                                                <div class="flex flex-wrap gap-2">
+                                                    @foreach($reply->attachments as $attachment)
+                                                        <a href="{{ route('attachments.download', $attachment) }}" class="inline-flex items-center px-2 py-1 rounded text-xs bg-gray-100 dark:bg-gray-600 text-gray-700 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-blue-700 transition-colors" target="_blank">
+                                                            <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
+                                                            </svg>
+                                                            {{ $attachment->original_name }} ({{ $attachment->formatted_size }})
+                                                        </a>
+                                                    @endforeach
+                                                </div>
+                                            </div>
+                                        @endif
+                                    </div>
+                                </div>
+                            </div>
+                            @endforeach
+                        </div>
+                    </div>
+                    @endif
+
                     <!-- Attachments -->
-                    @if(!empty($ticket->attachments))
+                    @if($ticket->attachments->count() > 0)
                     <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg mb-6">
                         <div class="p-6">
                             <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Attachments</h3>
@@ -100,16 +213,38 @@
                                 @foreach($ticket->attachments as $attachment)
                                 <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
                                     <div class="flex items-center space-x-3">
-                                        <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
-                                        </svg>
+                                        <!-- File type icon -->
+                                        <div class="flex-shrink-0">
+                                            @if($attachment->isImage())
+                                                <svg class="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                                </svg>
+                                            @elseif($attachment->isPdf())
+                                                <svg class="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                                                </svg>
+                                            @else
+                                                <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
+                                                </svg>
+                                            @endif
+                                        </div>
                                         <div class="flex-1 min-w-0">
                                             <p class="text-sm font-medium text-gray-900 dark:text-white truncate">
-                                                {{ $attachment['name'] ?? 'Unknown file' }}
+                                                {{ $attachment->original_name }}
                                             </p>
                                             <p class="text-sm text-gray-500 dark:text-gray-400">
-                                                {{ isset($attachment['size']) ? number_format($attachment['size'] / 1024, 1) . ' KB' : 'Unknown size' }}
+                                                {{ $attachment->formatted_size }}
                                             </p>
+                                        </div>
+                                        <div class="flex-shrink-0">
+                                            <a href="{{ route('attachments.download', $attachment) }}" 
+                                               class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                                               title="Download {{ $attachment->original_name }}">
+                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                                </svg>
+                                            </a>
                                         </div>
                                     </div>
                                 </div>
@@ -218,11 +353,11 @@
                                     </div>
                                     
                                     <div class="flex justify-end space-x-3">
-                                        <button type="button" onclick="clearDraftReply()" 
+                                        <button type="button" id="clear-draft-btn"
                                                 class="bg-gray-400 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded">
                                             Clear Draft
                                         </button>
-                                        <button type="button" onclick="hideReplyForm()" 
+                                        <button type="button" id="cancel-reply-btn"
                                                 class="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded">
                                             Cancel
                                         </button>
@@ -581,36 +716,109 @@
     </div>
 
     <script>
+        // Global variables for reply form
+        let replyMessageTextarea;
+        let replyForm;
+
+        // Move showReplyForm to global scope
+        function showReplyForm() {
+            console.log('=== SHOW REPLY FORM START ===');
+            console.log('showReplyForm function called');
+            
+            const replyFormContainer = document.getElementById('reply-form');
+            console.log('Reply form container found:', !!replyFormContainer);
+            
+            // Try to get the textarea element
+            const textareaElement = document.getElementById('reply-message');
+            console.log('Textarea element found:', !!textareaElement);
+            console.log('Textarea element:', textareaElement);
+            
+            // Set the global variable
+            replyMessageTextarea = textareaElement;
+            console.log('Global replyMessageTextarea set:', !!replyMessageTextarea);
+            
+            if (replyFormContainer) {
+                replyFormContainer.classList.remove('hidden');
+                console.log('Reply form container hidden class removed');
+                
+                // Auto-populate with a default reply template
+                if (replyMessageTextarea && !replyMessageTextarea.value.trim()) {
+                    console.log('Auto-populating default reply template');
+                    const defaultReply = `Hi,\n\nThank you for your email. `;
+                    replyMessageTextarea.value = defaultReply;
+                    replyMessageTextarea.focus();
+                    replyMessageTextarea.setSelectionRange(defaultReply.length, defaultReply.length);
+                    
+                    // Update preview if "Include Original Message" is checked
+                    if (typeof updateReplyPreview === 'function') {
+                        console.log('Calling updateReplyPreview function');
+                        updateReplyPreview();
+                    } else {
+                        console.warn('updateReplyPreview function not found');
+                    }
+                } else if (replyMessageTextarea) {
+                    console.log('Focusing on existing textarea content');
+                    replyMessageTextarea.focus();
+                } else {
+                    console.error('replyMessageTextarea is null or undefined');
+                }
+                
+                console.log('Reply form should now be visible');
+            } else {
+                console.error('Reply form container not found');
+            }
+            console.log('=== SHOW REPLY FORM END ===');
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
+            console.log('=== DOM CONTENT LOADED START ===');
             console.log('DOM loaded, JavaScript is working');
             
+            // Initialize global variables
+            replyMessageTextarea = document.getElementById('reply-message');
+            console.log('Global replyMessageTextarea initialized:', !!replyMessageTextarea);
+            console.log('replyMessageTextarea element:', replyMessageTextarea);
+            
+            replyForm = document.getElementById('email-reply-form');
+            console.log('Global replyForm initialized:', !!replyForm);
+            console.log('replyForm element:', replyForm);
+            
             const replyButton = document.getElementById('reply-button');
+            console.log('Reply button found:', !!replyButton);
             if (replyButton) {
                 replyButton.addEventListener('click', showReplyForm);
-            }
-
-            const replyForm = document.getElementById('email-reply-form');
-            if (replyForm) {
-                replyForm.addEventListener('submit', handleReplySubmit);
+                console.log('Reply button click event listener added');
             }
 
             // Add event listener for "Include Original Message" checkbox
             const includeOriginalCheckbox = document.getElementById('include-original');
+            console.log('Include original checkbox found:', !!includeOriginalCheckbox);
             if (includeOriginalCheckbox) {
                 includeOriginalCheckbox.addEventListener('change', updateReplyPreview);
+                console.log('Include original checkbox change event listener added');
             }
 
             // Add event listener for reply message textarea
-            const replyMessageTextarea = document.getElementById('reply-message');
             if (replyMessageTextarea) {
                 replyMessageTextarea.addEventListener('input', updateReplyPreview);
                 replyMessageTextarea.addEventListener('input', saveDraftReply);
                 replyMessageTextarea.addEventListener('input', updateCharCount);
+                console.log('Reply textarea event listeners added');
                 
                 // Load draft reply if exists
                 loadDraftReply();
                 // Update character count
                 updateCharCount();
+            } else {
+                console.error('replyMessageTextarea is null, cannot add event listeners');
+            }
+
+            // Add event listener for reply form submission
+            if (replyForm) {
+                replyForm.addEventListener('submit', handleReplySubmit);
+                console.log('Reply form submit event listener added');
+            } else {
+                console.error('replyForm is null, cannot add submit event listener');
             }
 
             // Add event listeners for notes form
@@ -713,6 +921,7 @@
 
                 // AI Rewrite button click
                 aiRewriteReplyBtn.addEventListener('click', function() {
+                    const replyMessageTextarea = document.getElementById('reply-message');
                     const message = replyMessageTextarea.value.trim();
                     const subject = '{{ $ticket->subject }}'; // Use ticket subject as context
 
@@ -745,7 +954,15 @@
                     })
                     .then(response => {
                         if (!response.ok) {
-                            throw new Error(`HTTP error! status: ${response.status}`);
+                            return response.json().then(err => { 
+                                console.error('Server validation errors:', err);
+                                // Handle Laravel validation errors
+                                if (err.errors) {
+                                    const errorMessages = Object.values(err.errors).flat().join('\n');
+                                    throw new Error('Validation errors:\n' + errorMessages);
+                                }
+                                throw new Error(err.message || 'Validation failed');
+                            });
                         }
                         return response.json();
                     })
@@ -785,11 +1002,14 @@
 
                 // Accept rewritten message
                 acceptReplyRewrite.addEventListener('click', function() {
+                    const replyMessageTextarea = document.getElementById('reply-message');
                     const rewrittenContent = rewrittenReplyMessageDiv.textContent;
                     replyMessageTextarea.value = rewrittenContent;
                     hideReplyModal();
                     // Update character count after setting the value
-                    updateCharCount();
+                    if (typeof updateCharCount === 'function') {
+                        updateCharCount();
+                    }
                 });
 
                 // Close modal when clicking outside
@@ -822,32 +1042,37 @@
             if (createTaskForm) {
                 createTaskForm.addEventListener('submit', handleCreateTaskSubmit);
             }
-        });
 
-        function showReplyForm() {
-            console.log('showReplyForm function called');
-            const replyFormContainer = document.getElementById('reply-form');
-            if (replyFormContainer) {
-                replyFormContainer.classList.remove('hidden');
-                
-                // Auto-populate with a default reply template
-                if (replyMessageTextarea && !replyMessageTextarea.value.trim()) {
-                    const defaultReply = `Hi,\n\nThank you for your email. `;
-                    replyMessageTextarea.value = defaultReply;
-                    replyMessageTextarea.focus();
-                    replyMessageTextarea.setSelectionRange(defaultReply.length, defaultReply.length);
-                    
-                    // Update preview if "Include Original Message" is checked
-                    updateReplyPreview();
-                } else {
-                    replyMessageTextarea.focus();
-                }
-                
-                console.log('Reply form should now be visible');
-            } else {
-                console.error('Reply form container not found');
+            // Expose UI-interactive functions to global scope for inline event handlers
+            window.editTicket = editTicket;
+            window.hideReplyForm = hideReplyForm;
+            window.clearDraftReply = clearDraftReply;
+            window.showNotesModal = showNotesModal;
+            window.deleteTicket = deleteTicket;
+            window.updateStatus = updateStatus;
+            window.createGoogleTask = createGoogleTask;
+            window.showReplyForm = showReplyForm;
+            console.log('Global functions exposed to window object');
+
+            // Add event listener for reply form buttons
+            const clearDraftBtn = document.getElementById('clear-draft-btn');
+            const cancelReplyBtn = document.getElementById('cancel-reply-btn');
+            
+            console.log('Clear draft button found:', !!clearDraftBtn);
+            console.log('Cancel reply button found:', !!cancelReplyBtn);
+            
+            if (clearDraftBtn) {
+                clearDraftBtn.addEventListener('click', clearDraftReply);
+                console.log('Clear draft button event listener added');
             }
-        }
+            
+            if (cancelReplyBtn) {
+                cancelReplyBtn.addEventListener('click', hideReplyForm);
+                console.log('Cancel reply button event listener added');
+            }
+            
+            console.log('=== DOM CONTENT LOADED END ===');
+        });
 
         function hideReplyForm() {
             console.log('hideReplyForm function called');
@@ -861,32 +1086,129 @@
 
         function handleReplySubmit(e) {
             e.preventDefault();
+            console.log('=== REPLY FORM SUBMISSION START ===');
             console.log('Reply form submitted');
 
             const form = e.target;
             const formData = new FormData(form);
 
-            // Handle "Include Original Message" checkbox
+            // Log initial form data
+            console.log('Initial FormData contents:');
+            for (let [key, value] of formData.entries()) {
+                console.log(`${key}: ${value}`);
+            }
+
+            // Ensure CSRF token is included in FormData
+            formData.append('_token', '{{ csrf_token() }}');
+            console.log('CSRF token added:', '{{ csrf_token() }}');
+
+            // Properly handle checkbox values - they need to be explicitly set as boolean strings
             const includeOriginal = document.getElementById('include-original').checked;
+            const replyToAll = document.getElementById('reply-to-all').checked;
+            
+            console.log('Checkbox values before processing:');
+            console.log('include_original checked:', includeOriginal);
+            console.log('reply_to_all checked:', replyToAll);
+            
+            // Use set() to replace existing values instead of delete/append
+            formData.set('include_original', includeOriginal ? '1' : '0');
+            formData.set('reply_to_all', replyToAll ? '1' : '0');
+            
+            console.log('Checkbox values after processing:');
+            console.log('include_original in FormData:', formData.get('include_original'));
+            console.log('reply_to_all in FormData:', formData.get('reply_to_all'));
+            
+            // Double-check that the values are correct
+            const finalIncludeOriginal = formData.get('include_original');
+            const finalReplyToAll = formData.get('reply_to_all');
+            
+            console.log('Final checkbox values verification:');
+            console.log('include_original final value:', finalIncludeOriginal, 'type:', typeof finalIncludeOriginal);
+            console.log('reply_to_all final value:', finalReplyToAll, 'type:', typeof finalReplyToAll);
+            
+            // Validate that the values are correct
+            if (finalIncludeOriginal !== '0' && finalIncludeOriginal !== '1') {
+                console.error('Invalid include_original value:', finalIncludeOriginal);
+                alert('Error: Invalid checkbox value. Please try again.');
+                return;
+            }
+            
+            if (finalReplyToAll !== '0' && finalReplyToAll !== '1') {
+                console.error('Invalid reply_to_all value:', finalReplyToAll);
+                alert('Error: Invalid checkbox value. Please try again.');
+                return;
+            }
+
+            // Client-side validation
+            const message = formData.get('message');
+            const to = formData.get('to');
+            const subject = formData.get('subject');
+            
+            console.log('Validation values:');
+            console.log('message:', message);
+            console.log('to:', to);
+            console.log('subject:', subject);
+            
+            if (!message || !message.trim()) {
+                console.error('Validation failed: Empty message');
+                alert('Please enter a reply message.');
+                document.getElementById('reply-message').focus();
+                return;
+            }
+            
+            if (!to || !to.trim()) {
+                console.error('Validation failed: Empty recipient');
+                alert('Please enter a recipient email address.');
+                document.getElementById('reply-to').focus();
+                return;
+            }
+            
+            if (!subject || !subject.trim()) {
+                console.error('Validation failed: Empty subject');
+                alert('Please enter a subject.');
+                document.getElementById('reply-subject').focus();
+                return;
+            }
+
+            // Handle "Include Original Message" checkbox
             const originalMessage = document.getElementById('reply-message').value;
+            console.log('Original message from textarea:', originalMessage);
             
             if (includeOriginal) {
                 const originalContent = `{{ $ticket->original_content }}`;
+                console.log('Original ticket content:', originalContent);
                 const formattedOriginal = `\n\n--- Original Message ---\nFrom: {{ $ticket->from_email }}\nDate: {{ $ticket->received_at->format('M j, Y g:i A') }}\nSubject: {{ $ticket->subject }}\n\n${originalContent}`;
+                console.log('Formatted original content:', formattedOriginal);
                 formData.set('message', originalMessage + formattedOriginal);
+                console.log('Final message with original included:', formData.get('message'));
+            }
+
+            // Final check to ensure message is not empty after processing
+            const finalMessage = formData.get('message');
+            console.log('Final message length:', finalMessage ? finalMessage.length : 0);
+            if (!finalMessage || !finalMessage.trim()) {
+                console.error('Validation failed: Empty final message');
+                alert('Please enter a reply message.');
+                document.getElementById('reply-message').focus();
+                return;
             }
 
             // Handle "Reply to All" checkbox
-            const replyToAll = document.getElementById('reply-to-all').checked;
             if (replyToAll) {
                 const toEmails = {!! json_encode($ticket->to_emails ?? []) !!};
                 const currentTo = formData.get('to');
                 const currentCc = formData.get('cc') || '';
                 
+                console.log('Reply to All processing:');
+                console.log('Original to_emails:', toEmails);
+                console.log('Current TO:', currentTo);
+                console.log('Current CC:', currentCc);
+                
                 // Add original sender to CC if not already in TO
                 if (currentTo !== '{{ $ticket->from_email }}') {
                     const newCc = currentCc ? `${currentCc}, {{ $ticket->from_email }}` : '{{ $ticket->from_email }}';
                     formData.set('cc', newCc);
+                    console.log('Added sender to CC:', newCc);
                 }
                 
                 // Add original recipients to CC
@@ -897,10 +1219,13 @@
                         !currentCc.includes(email)
                     );
                     
+                    console.log('Recipients to add:', recipientsToAdd);
+                    
                     if (recipientsToAdd.length > 0) {
                         const existingCc = formData.get('cc') || '';
                         const newCc = existingCc ? `${existingCc}, ${recipientsToAdd.join(', ')}` : recipientsToAdd.join(', ');
                         formData.set('cc', newCc);
+                        console.log('Final CC after adding recipients:', newCc);
                     }
                 }
             }
@@ -914,6 +1239,13 @@
             const recipientCount = 1 + (ccEmails ? ccEmails.split(',').length : 0);
             const messageLength = message.length;
             
+            console.log('Confirmation dialog data:');
+            console.log('To:', toEmail);
+            console.log('CC:', ccEmails);
+            console.log('Subject:', subject);
+            console.log('Recipient count:', recipientCount);
+            console.log('Message length:', messageLength);
+            
             let confirmMessage = `Are you sure you want to send this reply?\n\n`;
             confirmMessage += `To: ${toEmail}\n`;
             if (ccEmails) {
@@ -925,35 +1257,54 @@
             confirmMessage += `This action cannot be undone.`;
             
             if (!confirm(confirmMessage)) {
+                console.log('User cancelled reply submission');
                 return;
             }
 
-            // Log form data for debugging
+            // Log final form data for debugging
+            console.log('Final FormData contents before submission:');
             for (let [key, value] of formData.entries()) {
                 console.log(`${key}: ${value}`);
             }
+
+            // Additional debugging
+            console.log('Form validation passed');
+            console.log('Message length:', message.length);
+            console.log('To email:', to);
+            console.log('Subject:', subject);
+            console.log('CSRF Token:', '{{ csrf_token() }}');
+            console.log('Request URL:', '{{ route("tickets.reply", $ticket) }}');
 
             const submitButton = form.querySelector('button[type="submit"]');
             const originalText = submitButton.textContent;
             submitButton.textContent = 'Sending...';
             submitButton.disabled = true;
 
+            console.log('Making fetch request to:', '{{ route("tickets.reply", $ticket) }}');
+            
             fetch('{{ route("tickets.reply", $ticket) }}', {
                 method: 'POST',
                 body: formData,
                 headers: {
-                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
                     'Accept': 'application/json',
                 }
             })
             .then(response => {
+                console.log('Response status:', response.status);
+                console.log('Response headers:', response.headers);
+                
                 if (!response.ok) {
-                    return response.json().then(err => { throw err; });
+                    console.error('Response not OK, status:', response.status);
+                    return response.json().then(err => { 
+                        console.error('Server validation errors:', err);
+                        console.error('Error details:', JSON.stringify(err, null, 2));
+                        throw err; 
+                    });
                 }
                 return response.json();
             })
             .then(data => {
-                console.log('Reply response:', data);
+                console.log('Reply response success:', data);
                 if (data.message) {
                     // Show success message
                     const successMessage = document.createElement('div');
@@ -982,14 +1333,34 @@
                         window.location.reload();
                     }
                 } else {
+                    console.error('No message in success response');
                     alert('An unknown error occurred.');
                 }
             })
             .catch(error => {
+                console.error('=== REPLY FORM SUBMISSION ERROR ===');
                 console.error('Error sending reply:', error);
+                console.error('Error type:', typeof error);
+                console.error('Error constructor:', error.constructor.name);
+                console.error('Error stack:', error.stack);
+                
                 let errorMessage = 'Error sending reply. Please try again.';
+                
                 if (error.message) {
+                    console.error('Error message:', error.message);
                     errorMessage += `\n\nDetails: ${error.message}`;
+                }
+                
+                if (error.errors) {
+                    console.error('Validation errors object:', error.errors);
+                    console.error('Validation errors keys:', Object.keys(error.errors));
+                    const validationErrors = Object.values(error.errors).flat().join('\n');
+                    console.error('Flattened validation errors:', validationErrors);
+                    errorMessage += `\n\nValidation errors:\n${validationErrors}`;
+                }
+                
+                if (error.response) {
+                    console.error('Error response:', error.response);
                 }
                 
                 // Show error message
@@ -1011,6 +1382,7 @@
                 }, 5000);
             })
             .finally(() => {
+                console.log('=== REPLY FORM SUBMISSION END ===');
                 submitButton.textContent = originalText;
                 submitButton.disabled = false;
             });
@@ -1048,13 +1420,20 @@
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
                     'X-CSRF-TOKEN': '{{ csrf_token() }}'
                 },
                 body: JSON.stringify({
                     subject: newSubject
                 })
             })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
             .then(data => {
                 if (data.message) {
                     // Replace input with new subject element
@@ -1069,8 +1448,8 @@
                 }
             })
             .catch(error => {
-                console.error('Error:', error);
-                alert('Error updating ticket. Please try again.');
+                console.error('Error updating ticket:', error);
+                alert('Error updating ticket: ' + error.message);
             });
         }
 
@@ -1079,6 +1458,8 @@
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
                     'X-CSRF-TOKEN': '{{ csrf_token() }}'
                 },
                 body: JSON.stringify({
@@ -1120,6 +1501,9 @@
             const form = e.target;
             const formData = new FormData(form);
             
+            // Ensure CSRF token is included in FormData
+            formData.append('_token', '{{ csrf_token() }}');
+
             const submitButton = form.querySelector('button[type="submit"]');
             const originalText = submitButton.textContent;
             submitButton.textContent = 'Creating...';
@@ -1165,6 +1549,7 @@
             });
         }
 
+        // Global functions for reply form functionality
         function updateReplyPreview() {
             const includeOriginal = document.getElementById('include-original').checked;
             const replyMessage = document.getElementById('reply-message').value;
@@ -1310,6 +1695,9 @@
             const formData = new FormData(form);
             const noteId = formData.get('note_id');
             
+            // Ensure CSRF token is included in FormData
+            formData.append('_token', '{{ csrf_token() }}');
+
             const submitButton = form.querySelector('button[type="submit"]');
             const originalText = submitButton.textContent;
             submitButton.textContent = 'Saving...';
@@ -1325,7 +1713,6 @@
                 method: method,
                 body: formData,
                 headers: {
-                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
                     'Accept': 'application/json',
                 }
             })

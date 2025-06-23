@@ -39,12 +39,27 @@ class EmailService
                 return 0;
             }
 
+            // Skip calendar accounts - they don't have emails
+            if (in_array($emailAccount->type, ['google-calendar', 'microsoft-calendar'])) {
+                Log::info('Skipping email fetch for calendar account: ' . $emailAccount->email);
+                return 0;
+            }
+
             if ($emailAccount->type === 'gmail' || $emailAccount->type === 'outlook') {
                 return $this->fetchOAuthEmails($emailAccount);
             } else {
                 return $this->fetchImapEmails($emailAccount);
             }
         } catch (\Exception $e) {
+            // Check if this is a scope-related error
+            if ($this->isScopeInsufficientError($e)) {
+                Log::warning("Gmail account {$emailAccount->email} has insufficient scopes. User needs to reconnect account.", [
+                    'account_id' => $emailAccount->id,
+                    'error' => $e->getMessage()
+                ]);
+                throw new \Exception("Gmail account '{$emailAccount->email}' needs to be reconnected to access all features. Please go to the account settings and click 'Reconnect Account'.");
+            }
+            
             Log::error('Error fetching emails for account: ' . $emailAccount->email, [
                 'error' => $e->getMessage(),
                 'account_id' => $emailAccount->id
@@ -110,9 +125,20 @@ class EmailService
                     foreach ($messagesResponse->getMessages() as $message) {
                         $gmailMessage = $gmailService->users_messages->get('me', $message->getId());
                         if ($gmailMessage) {
-                            $this->processGmailMessage($emailAccount, $gmailMessage);
+                            $this->processGmailMessage($emailAccount, $gmailMessage, $gmailService);
                             $processedCount++;
-                            $gmailService->users_messages->modify('me', $message->getId(), new \Google_Service_Gmail_ModifyMessageRequest(['removeLabelIds' => ['UNREAD']]));
+                            try {
+                                $gmailService->users_messages->modify('me', $message->getId(), new \Google_Service_Gmail_ModifyMessageRequest(['removeLabelIds' => ['UNREAD']]));
+                            } catch (\Google\Service\Exception $modifyException) {
+                                if ($modifyException->getCode() === 403 && strpos($modifyException->getMessage(), 'insufficient authentication scopes') !== false) {
+                                    Log::warning("Cannot mark message as read for {$emailAccount->email} - insufficient modify scope. Message will remain unread.", [
+                                        'message_id' => $message->getId(),
+                                        'account_id' => $emailAccount->id
+                                    ]);
+                                } else {
+                                    throw $modifyException;
+                                }
+                            }
                         }
                     }
                 }
@@ -144,7 +170,7 @@ class EmailService
         return $processedCount;
     }
 
-    protected function processGmailMessage(EmailAccount $emailAccount, $gmailMessage): void
+    protected function processGmailMessage(EmailAccount $emailAccount, $gmailMessage, $gmailService): void
     {
         $payload = $gmailMessage->getPayload();
         $headers = collect($payload->getHeaders());
@@ -160,7 +186,8 @@ class EmailService
             'received_at' => \Carbon\Carbon::createFromTimestampMs($gmailMessage->getInternalDate()),
             'body' => $bodyData['plain_text'],
             'html_content' => $bodyData['html_content'],
-            'attachments' => $this->extractGmailAttachments($payload),
+            'attachments' => $this->extractGmailAttachments($payload, $gmailService, $gmailMessage->getId()),
+            'message_id' => $gmailMessage->getId(),
         ];
         
         Log::info('Processing Gmail message', [
@@ -168,8 +195,27 @@ class EmailService
             'subject' => $emailData['subject'],
             'from' => $emailData['from_email'],
             'has_attachments' => !empty($emailData['attachments']),
+            'attachment_count' => count($emailData['attachments']),
             'has_html' => !empty($emailData['html_content']),
         ]);
+
+        // Log attachment details if present
+        if (!empty($emailData['attachments'])) {
+            Log::info('Gmail message has attachments', [
+                'account_id' => $emailAccount->id,
+                'subject' => $emailData['subject'],
+                'attachment_count' => count($emailData['attachments']),
+                'attachments' => array_map(function($att) {
+                    return [
+                        'name' => $att['name'],
+                        'size' => $att['size'],
+                        'type' => $att['type'],
+                        'has_data' => isset($att['data']) && !empty($att['data']),
+                        'data_length' => isset($att['data']) ? strlen($att['data']) : 0
+                    ];
+                }, $emailData['attachments'])
+            ]);
+        }
 
         if ($this->applyEmailRules($emailAccount, $emailData)) {
             return;
@@ -221,22 +267,113 @@ class EmailService
         ];
     }
 
-    protected function extractGmailAttachments($payload): array
+    protected function extractGmailAttachments($payload, $gmailService = null, $messageId = null): array
     {
         $attachments = [];
         
+        Log::info('Extracting Gmail attachments', [
+            'has_parts' => $payload->getParts() ? 'yes' : 'no',
+            'parts_count' => $payload->getParts() ? count($payload->getParts()) : 0,
+            'has_gmail_service' => $gmailService ? 'yes' : 'no',
+            'message_id' => $messageId
+        ]);
+        
         if ($payload->getParts()) {
-            foreach ($payload->getParts() as $part) {
-                if ($part->getFilename() && $part->getBody()->getData()) {
-                    $attachments[] = [
+            foreach ($payload->getParts() as $index => $part) {
+                Log::info('Processing Gmail part', [
+                    'part_index' => $index,
+                    'has_filename' => $part->getFilename() ? 'yes' : 'no',
+                    'filename' => $part->getFilename(),
+                    'mime_type' => $part->getMimeType(),
+                    'has_body_data' => $part->getBody()->getData() ? 'yes' : 'no',
+                    'body_size' => $part->getBody()->getSize(),
+                    'has_attachment_id' => $part->getBody()->getAttachmentId() ? 'yes' : 'no',
+                    'attachment_id' => $part->getBody()->getAttachmentId()
+                ]);
+
+                // Check if this part has a filename (indicating it's an attachment)
+                if ($part->getFilename()) {
+                    $attachment = [
                         'name' => $part->getFilename(),
                         'size' => $part->getBody()->getSize(),
                         'type' => $part->getMimeType(),
-                        'data' => $this->base64url_decode($part->getBody()->getData())
                     ];
+                    
+                    // Try to get attachment data
+                    if ($part->getBody()->getData()) {
+                        // Direct data available
+                        $attachment['data'] = $this->base64url_decode($part->getBody()->getData());
+                        Log::info('Gmail attachment data extracted from body', [
+                            'filename' => $attachment['name'],
+                            'size' => $attachment['size'],
+                            'type' => $attachment['type'],
+                            'data_length' => strlen($attachment['data'])
+                        ]);
+                    } elseif ($part->getBody()->getAttachmentId() && $gmailService && $messageId) {
+                        // Attachment ID available - fetch the attachment separately
+                        Log::info('Gmail attachment has ID, fetching separately', [
+                            'filename' => $attachment['name'],
+                            'attachment_id' => $part->getBody()->getAttachmentId(),
+                            'size' => $attachment['size'],
+                            'type' => $attachment['type']
+                        ]);
+                        
+                        $attachmentData = $this->fetchGmailAttachment($gmailService, $messageId, $part->getBody()->getAttachmentId());
+                        if ($attachmentData) {
+                            $attachment['data'] = $attachmentData;
+                            Log::info('Gmail attachment data fetched successfully', [
+                                'filename' => $attachment['name'],
+                                'data_length' => strlen($attachmentData)
+                            ]);
+                        } else {
+                            Log::warning('Failed to fetch Gmail attachment data', [
+                                'filename' => $attachment['name'],
+                                'attachment_id' => $part->getBody()->getAttachmentId()
+                            ]);
+                            continue;
+                        }
+                    } else {
+                        Log::warning('Gmail attachment has no data or attachment ID, or missing service/message ID', [
+                            'filename' => $attachment['name'],
+                            'size' => $attachment['size'],
+                            'type' => $attachment['type'],
+                            'has_gmail_service' => $gmailService ? 'yes' : 'no',
+                            'has_message_id' => $messageId ? 'yes' : 'no'
+                        ]);
+                        continue;
+                    }
+                    
+                    // Extract Content-ID for inline attachments
+                    if ($part->getHeaders()) {
+                        foreach ($part->getHeaders() as $header) {
+                            if (strtolower($header->getName()) === 'content-id') {
+                                $contentId = trim($header->getValue(), '<>');
+                                $attachment['content_id'] = $contentId;
+                                Log::info('Gmail attachment has content ID', [
+                                    'filename' => $attachment['name'],
+                                    'content_id' => $contentId
+                                ]);
+                                break;
+                            }
+                        }
+                    }
+                    
+                    // Check if this is an inline attachment
+                    if ($part->getBody()->getAttachmentId()) {
+                        $attachment['is_inline'] = true;
+                        Log::info('Gmail attachment is inline', [
+                            'filename' => $attachment['name']
+                        ]);
+                    }
+                    
+                    $attachments[] = $attachment;
                 }
             }
         }
+
+        Log::info('Gmail attachment extraction completed', [
+            'total_attachments_found' => count($attachments)
+        ]);
 
         return $attachments;
     }
@@ -419,13 +556,65 @@ class EmailService
     protected function extractAttachments(Message $message): array
     {
         $attachments = [];
-        foreach ($message->getAttachments() as $attachment) {
-            $attachments[] = [
+        
+        Log::info('Extracting IMAP attachments', [
+            'message_subject' => $message->getSubject(),
+            'has_attachments' => $message->getAttachments() ? 'yes' : 'no',
+            'attachments_count' => $message->getAttachments() ? count($message->getAttachments()) : 0
+        ]);
+        
+        foreach ($message->getAttachments() as $index => $attachment) {
+            Log::info('Processing IMAP attachment', [
+                'attachment_index' => $index,
+                'name' => $attachment->getName(),
+                'size' => $attachment->getSize(),
+                'mime_type' => $attachment->getMimeType(),
+                'is_inline' => $attachment->isInline(),
+                'has_content' => $attachment->getContent() ? 'yes' : 'no',
+                'content_length' => $attachment->getContent() ? strlen($attachment->getContent()) : 0
+            ]);
+
+            $attachmentData = [
                 'name' => $attachment->getName(),
                 'size' => $attachment->getSize(),
                 'type' => $attachment->getMimeType(),
+                'data' => $attachment->getContent(), // Add the actual file content
             ];
+            
+            // Extract Content-ID for inline attachments
+            $contentId = $attachment->getContentId();
+            if ($contentId) {
+                $attachmentData['content_id'] = trim($contentId, '<>');
+                Log::info('IMAP attachment has content ID', [
+                    'name' => $attachment->getName(),
+                    'content_id' => $attachmentData['content_id']
+                ]);
+            }
+            
+            // Check if this is an inline attachment
+            if ($attachment->isInline()) {
+                $attachmentData['is_inline'] = true;
+                Log::info('IMAP attachment is inline', [
+                    'name' => $attachment->getName()
+                ]);
+            }
+            
+            Log::info('IMAP attachment data prepared', [
+                'name' => $attachmentData['name'],
+                'size' => $attachmentData['size'],
+                'type' => $attachmentData['type'],
+                'data_length' => strlen($attachmentData['data']),
+                'has_content_id' => isset($attachmentData['content_id']),
+                'is_inline' => isset($attachmentData['is_inline'])
+            ]);
+            
+            $attachments[] = $attachmentData;
         }
+        
+        Log::info('IMAP attachment extraction completed', [
+            'total_attachments_found' => count($attachments)
+        ]);
+        
         return $attachments;
     }
 
@@ -492,7 +681,7 @@ class EmailService
 
     protected function createTicket(EmailAccount $emailAccount, array $emailData): Ticket
     {
-        return Ticket::create([
+        $ticket = Ticket::create([
             'user_id' => $emailAccount->user_id,
             'email_account_id' => $emailAccount->id,
             'subject' => $emailData['subject'],
@@ -503,10 +692,108 @@ class EmailService
             'to_emails' => $emailData['to_emails'],
             'cc_emails' => $emailData['cc_emails'],
             'message_id' => $emailData['message_id'],
-            'attachments' => $emailData['attachments'],
+            'attachment_metadata' => [], // Keep empty array for backward compatibility
             'received_at' => $emailData['received_at'],
             'priority' => $this->determinePriority($emailData),
         ]);
+
+        // Store attachments using the Attachment model
+        if (!empty($emailData['attachments'])) {
+            Log::info('Processing attachments for ticket', [
+                'ticket_id' => $ticket->id,
+                'attachment_count' => count($emailData['attachments']),
+                'account_id' => $emailAccount->id,
+                'account_email' => $emailAccount->email
+            ]);
+
+            foreach ($emailData['attachments'] as $index => $attachmentData) {
+                try {
+                    Log::info('Processing attachment', [
+                        'ticket_id' => $ticket->id,
+                        'attachment_index' => $index,
+                        'attachment_name' => $attachmentData['name'],
+                        'attachment_size' => isset($attachmentData['data']) ? strlen($attachmentData['data']) : 'unknown',
+                        'attachment_type' => $attachmentData['type'],
+                        'has_content_id' => isset($attachmentData['content_id']),
+                        'is_inline' => isset($attachmentData['is_inline']) ? $attachmentData['is_inline'] : false
+                    ]);
+
+                    $metadata = [];
+                    if (isset($attachmentData['content_id'])) {
+                        $metadata['content_id'] = $attachmentData['content_id'];
+                        Log::info('Attachment has content ID', [
+                            'ticket_id' => $ticket->id,
+                            'attachment_name' => $attachmentData['name'],
+                            'content_id' => $attachmentData['content_id']
+                        ]);
+                    }
+                    if (isset($attachmentData['is_inline'])) {
+                        $metadata['is_inline'] = $attachmentData['is_inline'];
+                        Log::info('Attachment is inline', [
+                            'ticket_id' => $ticket->id,
+                            'attachment_name' => $attachmentData['name']
+                        ]);
+                    }
+
+                    // Check if we have the actual file data
+                    if (!isset($attachmentData['data']) || empty($attachmentData['data'])) {
+                        Log::warning('Attachment missing data', [
+                            'ticket_id' => $ticket->id,
+                            'attachment_name' => $attachmentData['name'],
+                            'has_data' => isset($attachmentData['data']),
+                            'data_length' => isset($attachmentData['data']) ? strlen($attachmentData['data']) : 0
+                        ]);
+                        continue; // Skip this attachment if no data
+                    }
+
+                    $attachment = \App\Models\Attachment::storeContent(
+                        $attachmentData['data'],
+                        $attachmentData['name'],
+                        $attachmentData['type'],
+                        $ticket,
+                        $metadata
+                    );
+
+                    Log::info('Attachment stored successfully', [
+                        'ticket_id' => $ticket->id,
+                        'attachment_id' => $attachment->id,
+                        'attachment_name' => $attachmentData['name'],
+                        'stored_name' => $attachment->stored_name,
+                        'file_size' => strlen($attachmentData['data']),
+                        'stored_size' => $attachment->size,
+                        'file_exists' => $attachment->exists(),
+                        'storage_path' => $attachment->path
+                    ]);
+                } catch (\Exception $e) {
+                    Log::error('Failed to store attachment', [
+                        'ticket_id' => $ticket->id,
+                        'attachment_index' => $index,
+                        'attachment_name' => $attachmentData['name'],
+                        'error' => $e->getMessage(),
+                        'error_trace' => $e->getTraceAsString()
+                    ]);
+                }
+            }
+
+            Log::info('Finished processing attachments for ticket', [
+                'ticket_id' => $ticket->id,
+                'total_attachments_processed' => count($emailData['attachments'])
+            ]);
+        } else {
+            Log::info('No attachments to process for ticket', [
+                'ticket_id' => $ticket->id,
+                'account_id' => $emailAccount->id
+            ]);
+        }
+
+        // Fire event for new ticket creation
+        event(new \App\Events\TicketCreated($ticket));
+
+        // Send notification to user
+        $user = $emailAccount->user;
+        $user->notify(new \App\Notifications\NewTicketNotification($ticket));
+
+        return $ticket;
     }
 
     protected function determinePriority(array $emailData): string
@@ -694,7 +981,23 @@ class EmailService
         // Email body
         $message .= "--{$boundary}\r\n";
         $message .= "Content-Type: text/plain; charset=UTF-8\r\n\r\n";
-        $message .= $emailData['body'] . "\r\n\r\n";
+        
+        // Add signature to body if available
+        $body = $emailData['body'];
+        if (!empty($emailData['signature_text'])) {
+            $body .= "\r\n\r\n" . $emailData['signature_text'];
+        }
+        
+        $message .= $body . "\r\n\r\n";
+        
+        // Add signature image if available
+        if (!empty($emailData['signature_image_path'])) {
+            $message .= "--{$boundary}\r\n";
+            $message .= "Content-Type: image/" . pathinfo($emailData['signature_image_path'], PATHINFO_EXTENSION) . "; name=\"signature." . pathinfo($emailData['signature_image_path'], PATHINFO_EXTENSION) . "\"\r\n";
+            $message .= "Content-Transfer-Encoding: base64\r\n";
+            $message .= "Content-Disposition: inline; filename=\"signature." . pathinfo($emailData['signature_image_path'], PATHINFO_EXTENSION) . "\"\r\n\r\n";
+            $message .= base64_encode(file_get_contents(storage_path('app/public/' . $emailData['signature_image_path']))) . "\r\n\r\n";
+        }
         
         // Attachments
         foreach ($emailData['attachments'] as $attachment) {
@@ -715,11 +1018,17 @@ class EmailService
 
     protected function buildOutlookMessage(array $emailData): array
     {
+        // Add signature to body if available
+        $body = $emailData['body'];
+        if (!empty($emailData['signature_text'])) {
+            $body .= "\r\n\r\n" . $emailData['signature_text'];
+        }
+
         $message = [
             'subject' => $emailData['subject'],
             'body' => [
                 'contentType' => 'Text',
-                'content' => $emailData['body']
+                'content' => $body
             ],
             'toRecipients' => [
                 ['emailAddress' => ['address' => $emailData['to']]]
@@ -733,9 +1042,26 @@ class EmailService
             }
         }
 
+        // Add signature image if available
+        if (!empty($emailData['signature_image_path'])) {
+            if (!isset($message['attachments'])) {
+                $message['attachments'] = [];
+            }
+            $message['attachments'][] = [
+                '@odata.type' => '#microsoft.graph.fileAttachment',
+                'name' => 'signature.' . pathinfo($emailData['signature_image_path'], PATHINFO_EXTENSION),
+                'contentType' => 'image/' . pathinfo($emailData['signature_image_path'], PATHINFO_EXTENSION),
+                'contentBytes' => base64_encode(file_get_contents(storage_path('app/public/' . $emailData['signature_image_path']))),
+                'isInline' => true,
+                'contentId' => 'signature'
+            ];
+        }
+
         // Add attachments if any
         if (!empty($emailData['attachments'])) {
-            $message['attachments'] = [];
+            if (!isset($message['attachments'])) {
+                $message['attachments'] = [];
+            }
             foreach ($emailData['attachments'] as $attachment) {
                 $message['attachments'][] = [
                     '@odata.type' => '#microsoft.graph.fileAttachment',
@@ -853,5 +1179,53 @@ class EmailService
             'account_id' => $account->id,
             'reason' => $reason
         ]);
+    }
+
+    protected function isScopeInsufficientError(\Exception $e): bool
+    {
+        // Check if this is a Google API scope error
+        if ($e instanceof \Google\Service\Exception) {
+            $errorMessage = $e->getMessage();
+            return $e->getCode() === 403 && 
+                   (strpos($errorMessage, 'insufficient authentication scopes') !== false ||
+                    strpos($errorMessage, 'ACCESS_TOKEN_SCOPE_INSUFFICIENT') !== false);
+        }
+        
+        return false;
+    }
+
+    protected function fetchGmailAttachment($gmailService, $messageId, $attachmentId): ?string
+    {
+        try {
+            Log::info('Fetching Gmail attachment', [
+                'message_id' => $messageId,
+                'attachment_id' => $attachmentId
+            ]);
+            
+            $attachment = $gmailService->users_messages_attachments->get('me', $messageId, $attachmentId);
+            
+            if ($attachment && $attachment->getData()) {
+                $data = $this->base64url_decode($attachment->getData());
+                Log::info('Gmail attachment fetched successfully', [
+                    'message_id' => $messageId,
+                    'attachment_id' => $attachmentId,
+                    'data_length' => strlen($data)
+                ]);
+                return $data;
+            } else {
+                Log::warning('Gmail attachment fetch returned no data', [
+                    'message_id' => $messageId,
+                    'attachment_id' => $attachmentId
+                ]);
+                return null;
+            }
+        } catch (\Exception $e) {
+            Log::error('Failed to fetch Gmail attachment', [
+                'message_id' => $messageId,
+                'attachment_id' => $attachmentId,
+                'error' => $e->getMessage()
+            ]);
+            return null;
+        }
     }
 } 

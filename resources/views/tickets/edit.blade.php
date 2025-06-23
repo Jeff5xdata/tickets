@@ -200,12 +200,12 @@
 
                             <!-- Attachments (JSON) -->
                             <div class="md:col-span-2">
-                                <label for="attachments" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Attachments (JSON)</label>
-                                <input type="text" id="attachments" name="attachments" 
-                                       value="{{ old('attachments', is_array($ticket->attachments) ? json_encode($ticket->attachments) : $ticket->attachments) }}" 
+                                <label for="attachment_metadata" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Attachments (JSON)</label>
+                                <input type="text" id="attachment_metadata" name="attachment_metadata" 
+                                       value="{{ old('attachment_metadata', is_array($ticket->attachment_metadata) ? json_encode($ticket->attachment_metadata) : $ticket->attachment_metadata) }}" 
                                        class="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
                                        placeholder='["file1.pdf", "file2.jpg"]'>
-                                @error('attachments')
+                                @error('attachment_metadata')
                                     <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
                                 @enderror
                             </div>

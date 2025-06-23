@@ -6,6 +6,7 @@ use App\Models\Ticket;
 use App\Models\EmailAccount;
 use App\Models\Reply;
 use App\Models\Note;
+use App\Models\Attachment;
 use App\Services\AiRewritingService;
 use App\Services\EmailService;
 use Illuminate\Http\Request;
@@ -97,6 +98,13 @@ class TicketController extends Controller
         $tickets = $query->orderBy('received_at', 'desc')->paginate(20);
         $emailAccounts = auth()->user()->emailAccounts()->where('is_active', true)->get();
 
+        // Add cache control headers to prevent aggressive caching
+        if (!app()->environment('local')) {
+            header('Cache-Control: no-cache, no-store, must-revalidate');
+            header('Pragma: no-cache');
+            header('Expires: 0');
+        }
+
         return view('tickets.index', compact('tickets', 'emailAccounts'));
     }
 
@@ -135,6 +143,8 @@ class TicketController extends Controller
                 'subject' => $validated['subject'],
                 'body' => $validated['message'],
                 'attachments' => [],
+                'signature_text' => $emailAccount->signature_text,
+                'signature_image_path' => $emailAccount->signature_image_path,
             ];
             if ($request->hasFile('attachments')) {
                 foreach ($request->file('attachments') as $file) {
@@ -145,8 +155,20 @@ class TicketController extends Controller
                     ];
                 }
             }
+            // Send email using the email service
+            Log::info('Attempting to send email', [
+                'ticket_id' => null,
+                'email_account_id' => $emailAccount->id,
+                'to' => $emailData['to'],
+                'subject' => $emailData['subject'],
+                'has_attachments' => !empty($emailData['attachments'])
+            ]);
             $this->emailService->sendEmail($emailAccount, $emailData);
-            Ticket::create([
+            Log::info('Email sent successfully', [
+                'ticket_id' => null,
+                'email_account_id' => $emailAccount->id
+            ]);
+            $ticket = Ticket::create([
                 'user_id' => auth()->id(),
                 'email_account_id' => $emailAccount->id,
                 'subject' => $validated['subject'],
@@ -158,8 +180,17 @@ class TicketController extends Controller
                 'priority' => 'medium',
                 'received_at' => now(),
                 'responded_at' => now(),
-                'attachments' => $request->hasFile('attachments') ? array_map(fn($file) => $file->getClientOriginalName(), $request->file('attachments')) : null,
             ]);
+            // Store attachments in the new table
+            if ($request->hasFile('attachments')) {
+                foreach ($request->file('attachments') as $file) {
+                    Attachment::storeFile($file, $ticket);
+                }
+            }
+            // Fire event for new ticket creation
+            event(new \App\Events\TicketCreated($ticket));
+            // Send notification to user
+            auth()->user()->notify(new \App\Notifications\NewTicketNotification($ticket));
             return redirect()->route('tickets.index')->with('success', 'Ticket created and email sent successfully.');
         } catch (\Exception $e) {
             Log::error('Error sending new ticket email: ' . $e->getMessage(), ['user_id' => auth()->id(), 'error' => $e->getMessage()]);
@@ -171,7 +202,7 @@ class TicketController extends Controller
     {
         $this->authorize('view', $ticket);
 
-        $ticket->load(['emailAccount', 'googleTasks', 'replies.user', 'notes.user']);
+        $ticket->load(['emailAccount', 'googleTasks', 'replies.user', 'notes.user', 'attachments']);
 
         // Get related tickets from the same sender
         $relatedTickets = auth()->user()->tickets()
@@ -201,7 +232,7 @@ class TicketController extends Controller
         return view('tickets.edit', compact('ticket', 'emailAccounts', 'aiEnabled'));
     }
 
-    public function update(Request $request, Ticket $ticket): JsonResponse|View
+    public function update(Request $request, Ticket $ticket): JsonResponse|View|\Illuminate\Http\RedirectResponse
     {
         $this->authorize('update', $ticket);
 
@@ -221,7 +252,7 @@ class TicketController extends Controller
             'received_at' => 'sometimes|date',
             'message_id' => 'sometimes|string',
             'thread_id' => 'sometimes|string',
-            'attachments' => 'sometimes|string',
+            'attachment_metadata' => 'sometimes|string',
         ]);
 
         // Handle JSON fields
@@ -234,18 +265,20 @@ class TicketController extends Controller
         if (isset($validated['bcc_emails'])) {
             $validated['bcc_emails'] = json_decode($validated['bcc_emails'], true);
         }
-        if (isset($validated['attachments'])) {
-            $validated['attachments'] = json_decode($validated['attachments'], true);
+        if (isset($validated['attachment_metadata'])) {
+            $validated['attachment_metadata'] = json_decode($validated['attachment_metadata'], true);
         }
 
         $ticket->update($validated);
 
-        // If it's an AJAX request, return JSON
-        if ($request->expectsJson()) {
+        // For PATCH requests, always return JSON (they are typically AJAX)
+        if ($request->method() === 'PATCH') {
             return response()->json([
                 'message' => 'Ticket updated successfully',
                 'ticket' => $ticket->fresh()
-            ]);
+            ])->header('Access-Control-Allow-Origin', '*')
+              ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS')
+              ->header('Access-Control-Allow-Headers', 'Content-Type, Accept, X-Requested-With, X-CSRF-TOKEN');
         }
 
         // If it's a regular form submission, redirect with success message
@@ -273,14 +306,39 @@ class TicketController extends Controller
     {
         $this->authorize('update', $ticket);
 
+        // Log the incoming request data for debugging
+        Log::info('Reply request received', [
+            'ticket_id' => $ticket->id,
+            'request_data' => $request->all(),
+            'files' => $request->hasFile('attachments') ? 'Has attachments' : 'No attachments',
+            'include_original_raw' => $request->input('include_original'),
+            'reply_to_all_raw' => $request->input('reply_to_all'),
+        ]);
+
         $validated = $request->validate([
             'to' => 'required|email',
             'cc' => 'nullable|string',
             'subject' => 'required|string|max:255',
             'message' => 'required|string',
             'attachments.*' => 'nullable|file|max:10240', // 10MB max per file
-            'include_original' => 'nullable|boolean',
-            'reply_to_all' => 'nullable|boolean',
+            'include_original' => 'nullable|in:0,1,true,false,on',
+            'reply_to_all' => 'nullable|in:0,1,true,false,on',
+        ]);
+
+        // Convert string boolean values to actual booleans
+        $includeOriginalValue = $validated['include_original'] ?? false;
+        $replyToAllValue = $validated['reply_to_all'] ?? false;
+        
+        // Handle 'on' value from checkboxes
+        $validated['include_original'] = in_array($includeOriginalValue, ['1', 'true', 'on'], true);
+        $validated['reply_to_all'] = in_array($replyToAllValue, ['1', 'true', 'on'], true);
+        
+        Log::info('Checkbox values processed', [
+            'ticket_id' => $ticket->id,
+            'include_original_raw' => $includeOriginalValue,
+            'include_original_processed' => $validated['include_original'],
+            'reply_to_all_raw' => $replyToAllValue,
+            'reply_to_all_processed' => $validated['reply_to_all'],
         ]);
 
         try {
@@ -288,7 +346,60 @@ class TicketController extends Controller
             $emailAccount = $ticket->emailAccount;
             
             if (!$emailAccount) {
-                throw new \Exception('No email account found for this ticket');
+                Log::error('No email account found for ticket', ['ticket_id' => $ticket->id]);
+                return response()->json([
+                    'message' => 'No email account found for this ticket. Please configure an email account first.'
+                ], 422);
+            }
+
+            // Check if email account is active
+            if (!$emailAccount->is_active) {
+                Log::error('Email account is not active', [
+                    'ticket_id' => $ticket->id,
+                    'email_account_id' => $emailAccount->id
+                ]);
+                return response()->json([
+                    'message' => 'The email account for this ticket is not active. Please activate it first.'
+                ], 422);
+            }
+
+            // Check if email account has required configuration
+            $hasValidCredentials = false;
+            
+            if (in_array($emailAccount->type, ['gmail', 'outlook'])) {
+                // OAuth accounts need access token and refresh token
+                $hasValidCredentials = !empty($emailAccount->access_token) && !empty($emailAccount->refresh_token);
+            } else {
+                // IMAP accounts need email and password
+                $hasValidCredentials = !empty($emailAccount->email) && !empty($emailAccount->password);
+            }
+            
+            if (!$emailAccount->email || !$hasValidCredentials) {
+                Log::error('Email account missing required configuration', [
+                    'ticket_id' => $ticket->id,
+                    'email_account_id' => $emailAccount->id,
+                    'account_type' => $emailAccount->type,
+                    'has_email' => !empty($emailAccount->email),
+                    'has_password' => !empty($emailAccount->password),
+                    'has_access_token' => !empty($emailAccount->access_token),
+                    'has_refresh_token' => !empty($emailAccount->refresh_token),
+                    'has_valid_credentials' => $hasValidCredentials
+                ]);
+                return response()->json([
+                    'message' => 'The email account is missing required configuration. Please configure it properly.'
+                ], 422);
+            }
+
+            // Check if email account is configured for sending emails
+            if (!in_array($emailAccount->type, ['gmail', 'outlook'])) {
+                Log::error('Email account not configured for sending emails', [
+                    'ticket_id' => $ticket->id,
+                    'email_account_id' => $emailAccount->id,
+                    'account_type' => $emailAccount->type
+                ]);
+                return response()->json([
+                    'message' => 'The email account is configured for ' . $emailAccount->type . ' but not for sending emails. Please configure a Gmail or Outlook account for sending emails.'
+                ], 422);
             }
 
             // Prepare email data
@@ -298,6 +409,8 @@ class TicketController extends Controller
                 'subject' => $validated['subject'],
                 'body' => $validated['message'],
                 'attachments' => [],
+                'signature_text' => $emailAccount->signature_text,
+                'signature_image_path' => $emailAccount->signature_image_path,
             ];
 
             // Handle file attachments
@@ -314,7 +427,20 @@ class TicketController extends Controller
             }
 
             // Send email using the email service
+            Log::info('Attempting to send email', [
+                'ticket_id' => $ticket->id,
+                'email_account_id' => $emailAccount->id,
+                'to' => $emailData['to'],
+                'subject' => $emailData['subject'],
+                'has_attachments' => !empty($emailData['attachments'])
+            ]);
+            
             $this->emailService->sendEmail($emailAccount, $emailData);
+            
+            Log::info('Email sent successfully', [
+                'ticket_id' => $ticket->id,
+                'email_account_id' => $emailAccount->id
+            ]);
 
             // Save reply to database
             $reply = Reply::create([
@@ -326,12 +452,18 @@ class TicketController extends Controller
                 'to_email' => $validated['to'],
                 'cc_emails' => $validated['cc'] ? array_filter(array_map('trim', explode(',', $validated['cc']))) : null,
                 'bcc_emails' => null,
-                'attachments' => !empty($attachmentNames) ? $attachmentNames : null,
-                'include_original' => $validated['include_original'] ?? false,
-                'reply_to_all' => $validated['reply_to_all'] ?? false,
+                'include_original' => $validated['include_original'],
+                'reply_to_all' => $validated['reply_to_all'],
                 'status' => 'sent',
                 'sent_at' => now(),
             ]);
+
+            // Store attachments in the new table
+            if ($request->hasFile('attachments')) {
+                foreach ($request->file('attachments') as $file) {
+                    Attachment::storeFile($file, $reply);
+                }
+            }
 
             // Update ticket status to responded
             $ticket->update([

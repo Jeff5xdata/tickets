@@ -13,3 +13,8 @@ Schedule::command('emails:check')
     ->everyFiveMinutes()
     ->withoutOverlapping()
     ->runInBackground();
+
+// Schedule session cleanup daily at 2 AM
+Schedule::command('sessions:cleanup')
+    ->dailyAt('02:00')
+    ->runInBackground();

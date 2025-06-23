@@ -47,15 +47,25 @@
 
     <script>
         function closeAndRedirect() {
-            // Close this popup window
-            window.close();
-            
-            // Redirect the parent window
-            if (window.opener && !window.opener.closed) {
-                window.opener.location.href = '{{ $redirect_url }}';
+            // Try to redirect the parent window first
+            if (window.opener) {
+                try {
+                    window.opener.location.href = '{{ $redirect_url }}';
+                } catch (e) {
+                    // If we can't access opener due to COOP, redirect this window
+                    console.log('Cannot access opener window, redirecting current window');
+                    window.location.href = '{{ $redirect_url }}';
+                }
             } else {
-                // Fallback: redirect this window if opener is not available
+                // No opener, redirect this window
                 window.location.href = '{{ $redirect_url }}';
+            }
+            
+            // Close this popup window
+            try {
+                window.close();
+            } catch (e) {
+                console.log('Cannot close window, user will need to close manually');
             }
         }
 

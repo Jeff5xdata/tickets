@@ -21,7 +21,7 @@
                                     </svg>
                                     <h4 class="text-lg font-medium text-gray-900 dark:text-white ml-4">Gmail Email</h4>
                                 </div>
-                                <p class="text-sm text-gray-600 dark:text-gray-400">Connect your Gmail account for email access using OAuth.</p>
+                                <p class="text-sm text-gray-600 dark:text-gray-400">Connect your Gmail account for email and calendar access using OAuth.</p>
                             </div>
 
                             <!-- Google Tasks OAuth -->
@@ -32,7 +32,7 @@
                                     </svg>
                                     <h4 class="text-lg font-medium text-gray-900 dark:text-white ml-4">Google Tasks</h4>
                                 </div>
-                                <p class="text-sm text-gray-600 dark:text-gray-400">Connect your Google account for Tasks integration using OAuth.</p>
+                                <p class="text-sm text-gray-600 dark:text-gray-400">Connect your Google account for Tasks and Calendar integration using OAuth.</p>
                             </div>
 
                             <!-- Outlook OAuth -->
@@ -43,7 +43,7 @@
                                     </svg>
                                     <h4 class="text-lg font-medium text-gray-900 dark:text-white ml-4">Outlook</h4>
                                 </div>
-                                <p class="text-sm text-gray-600 dark:text-gray-400">Connect your Outlook account using OAuth for seamless integration.</p>
+                                <p class="text-sm text-gray-600 dark:text-gray-400">Connect your Outlook account using OAuth for email, tasks, and calendar integration.</p>
                             </div>
 
                             <!-- IMAP Manual -->
@@ -70,7 +70,7 @@
                                 <div>
                                     <h4 class="text-sm font-medium text-blue-800 dark:text-blue-200">Secure OAuth Connection</h4>
                                     <p class="text-sm text-blue-700 dark:text-blue-300 mt-1">
-                                        Click the button below to securely connect your account. You'll be redirected to authorize access to your emails and tasks.
+                                        Click the button below to securely connect your account. You'll be redirected to authorize access to your emails, tasks, and calendar.
                                     </p>
                                 </div>
                             </div>
@@ -280,7 +280,7 @@
                     const popup = window.open(oauthRedirectUrl, 'oauth_popup', 'width=600,height=700,scrollbars=yes,resizable=yes');
                     
                     // Check if popup was blocked
-                    if (!popup || popup.closed || typeof popup.closed == 'undefined') {
+                    if (!popup) {
                         alert('Popup blocked! Please allow popups for this site and try again, or click the link below to open manually.');
                         // Fallback: show the URL
                         document.getElementById('oauth-modal-description').innerHTML = `
@@ -290,17 +290,15 @@
                             </a>
                         `;
                     } else {
-                        // Monitor popup for completion
-                        const checkClosed = setInterval(() => {
-                            if (popup.closed) {
-                                clearInterval(checkClosed);
-                                closeOAuthModal();
-                                // Check if account was created successfully
-                                setTimeout(() => {
-                                    window.location.href = '/email-accounts';
-                                }, 1000);
-                            }
-                        }, 1000);
+                        // Use a more robust approach - redirect the current window after a delay
+                        // This avoids COOP issues with popup.closed
+                        setTimeout(() => {
+                            closeOAuthModal();
+                            // Redirect to email accounts page after a reasonable delay
+                            setTimeout(() => {
+                                window.location.href = '/email-accounts';
+                            }, 2000);
+                        }, 3000);
                     }
                 }
             };
