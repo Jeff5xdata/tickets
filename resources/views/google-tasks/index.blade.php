@@ -33,7 +33,7 @@
             <!-- Filters and Search -->
             <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg mb-6">
                 <div class="p-6">
-                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
                         <div>
                             <label for="status_filter" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Status</label>
                             <select id="status_filter" onchange="filterTasks()" class="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
@@ -49,6 +49,19 @@
                                 @foreach($taskLists as $list)
                                     <option value="{{ $list->list_id }}">{{ $list->list_name }}</option>
                                 @endforeach
+                            </select>
+                        </div>
+                        <div>
+                            <label for="sort_filter" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Sort By</label>
+                            <select id="sort_filter" onchange="changeSort()" class="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                                <option value="due_date_desc" {{ $sortBy === 'due_date_desc' ? 'selected' : '' }}>Due Date (Newest First)</option>
+                                <option value="due_date_asc" {{ $sortBy === 'due_date_asc' ? 'selected' : '' }}>Due Date (Oldest First)</option>
+                                <option value="title_asc" {{ $sortBy === 'title_asc' ? 'selected' : '' }}>Title (A-Z)</option>
+                                <option value="title_desc" {{ $sortBy === 'title_desc' ? 'selected' : '' }}>Title (Z-A)</option>
+                                <option value="list_asc" {{ $sortBy === 'list_asc' ? 'selected' : '' }}>Task List (A-Z)</option>
+                                <option value="list_desc" {{ $sortBy === 'list_desc' ? 'selected' : '' }}>Task List (Z-A)</option>
+                                <option value="created_desc" {{ $sortBy === 'created_desc' ? 'selected' : '' }}>Created (Newest First)</option>
+                                <option value="created_asc" {{ $sortBy === 'created_asc' ? 'selected' : '' }}>Created (Oldest First)</option>
                             </select>
                         </div>
                         <div>
@@ -286,6 +299,13 @@
             document.getElementById('list_filter').value = '';
             document.getElementById('search').value = '';
             filterTasks();
+        }
+
+        function changeSort() {
+            const sortValue = document.getElementById('sort_filter').value;
+            const currentUrl = new URL(window.location);
+            currentUrl.searchParams.set('sort', sortValue);
+            window.location.href = currentUrl.toString();
         }
     </script>
 </x-app-layout> 

@@ -70,6 +70,14 @@ class TicketController extends Controller
         $this->authorize('viewAny', Ticket::class);
         $query = auth()->user()->tickets()->with(['emailAccount']);
 
+        // Get user preferences for filtering
+        $userPreferences = auth()->user()->getPreferences();
+        
+        // Filter out closed tickets if user preference is set to false
+        if (!$userPreferences->show_closed_tickets) {
+            $query->where('status', '!=', 'closed');
+        }
+
         // Filter by status
         if ($request->has('status') && $request->status !== 'all') {
             $query->where('status', $request->status);
@@ -95,8 +103,47 @@ class TicketController extends Controller
             });
         }
 
-        $tickets = $query->orderBy('received_at', 'desc')->paginate(20);
+        // Get user's ticket sort preference
+        $sortPreference = $request->get('sort', $userPreferences->ticket_sort ?? 'received_desc');
+        
+        // Apply sorting based on user preference or request parameter
+        switch ($sortPreference) {
+            case 'received_asc':
+                $query->orderBy('received_at', 'asc');
+                break;
+            case 'subject_asc':
+                $query->orderBy('subject', 'asc');
+                break;
+            case 'subject_desc':
+                $query->orderBy('subject', 'desc');
+                break;
+            case 'from_email_asc':
+                $query->orderBy('from_email', 'asc');
+                break;
+            case 'from_email_desc':
+                $query->orderBy('from_email', 'desc');
+                break;
+            case 'status_asc':
+                $query->orderBy('status', 'asc');
+                break;
+            case 'status_desc':
+                $query->orderBy('status', 'desc');
+                break;
+            case 'priority_asc':
+                $query->orderBy('priority', 'asc');
+                break;
+            case 'priority_desc':
+                $query->orderBy('priority', 'desc');
+                break;
+            case 'received_desc':
+            default:
+                $query->orderBy('received_at', 'desc');
+                break;
+        }
+
+        $tickets = $query->paginate(20);
         $emailAccounts = auth()->user()->emailAccounts()->where('is_active', true)->get();
+        $ticketSorts = \App\Models\UserPreference::getAvailableTicketSorts();
 
         // Add cache control headers to prevent aggressive caching
         if (!app()->environment('local')) {
@@ -105,7 +152,7 @@ class TicketController extends Controller
             header('Expires: 0');
         }
 
-        return view('tickets.index', compact('tickets', 'emailAccounts'));
+        return view('tickets.index', compact('tickets', 'emailAccounts', 'ticketSorts', 'sortPreference'));
     }
 
     public function create()
@@ -215,7 +262,10 @@ class TicketController extends Controller
         // Check if AI rewriting is enabled
         $aiEnabled = config('services.gemini.enabled', false) && config('services.gemini.api_key');
 
-        return view('tickets.show', compact('ticket', 'relatedTickets', 'aiEnabled'));
+        // Get user preferences for display settings
+        $userPreferences = auth()->user()->getPreferences();
+
+        return view('tickets.show', compact('ticket', 'relatedTickets', 'aiEnabled', 'userPreferences'));
     }
 
     public function edit(Ticket $ticket): View

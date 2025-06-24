@@ -68,27 +68,23 @@
                     </div>
 
                     <!-- Ticket Content -->
-                    <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg mb-6">
+                    <div class="bg-white dark:bg-gray-600 overflow-hidden shadow-sm sm:rounded-lg mb-6">
                         <div class="p-6">
                             <div class="flex items-center justify-between mb-4">
                                 <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Email Content</h3>
                                 @if($ticket->html_content)
                                 <div class="flex space-x-2">
-                                    <button id="view-plain-text" class="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors">
-                                        Plain Text
-                                    </button>
-                                    <button id="view-html" class="px-3 py-1 text-sm bg-gray-300 text-gray-700 rounded hover:bg-gray-400 transition-colors">
-                                        HTML
-                                    </button>
+
                                 </div>
                                 @endif
                             </div>
                             <div class="prose dark:prose-invert max-w-none">
-                                <div id="ticket-content-plain" class="text-gray-700 dark:text-gray-300" style="white-space: pre-line; word-wrap: break-word;">
+                                @if($ticket->html_content)
+                                <!-- When HTML content exists, show both formats with toggle -->
+                                <div id="ticket-content-plain" class="text-gray-700 dark:text-gray-300 {{ $userPreferences->ticket_display_format === 'plain_text' ? '' : 'hidden' }}" style="white-space: pre-line; word-wrap: break-word;">
                                     {{ html_entity_decode(strip_tags($ticket->original_content), ENT_QUOTES | ENT_HTML5, 'UTF-8') }}
                                 </div>
-                                @if($ticket->html_content)
-                                <div id="ticket-content-html" class="text-gray-700 dark:text-gray-300 hidden" style="word-wrap: break-word;">
+                                <div id="ticket-content-html" class="text-gray-700 dark:text-gray-300 {{ $userPreferences->ticket_display_format === 'html' ? '' : 'hidden' }}" style="word-wrap: break-word;">
                                     <div class="email-html-content" style="max-width: 100%; overflow-x: auto;">
                                         <style>
                                             .email-html-content img {
@@ -108,6 +104,11 @@
                                         </style>
                                         {!! $ticket->getSafeHtmlContent() !!}
                                     </div>
+                                </div>
+                                @else
+                                <!-- If no HTML content, show plain text without toggle buttons -->
+                                <div class="text-gray-700 dark:text-gray-300" style="white-space: pre-line; word-wrap: break-word;">
+                                    {{ html_entity_decode(strip_tags($ticket->original_content), ENT_QUOTES | ENT_HTML5, 'UTF-8') }}
                                 </div>
                                 @endif
                             </div>
@@ -720,6 +721,188 @@
         let replyMessageTextarea;
         let replyForm;
 
+        // Global functions for quick actions - must be defined outside DOMContentLoaded
+        function updateStatus(status) {
+            console.log('updateStatus function called with status:', status);
+            console.log('CSRF token:', '{{ csrf_token() }}');
+            console.log('Route:', '{{ route("tickets.update", $ticket) }}');
+            
+            fetch('{{ route("tickets.update", $ticket) }}', {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                },
+                body: JSON.stringify({
+                    status: status
+                })
+            })
+            .then(response => {
+                console.log('Response status:', response.status);
+                console.log('Response headers:', response.headers);
+                return response.json();
+            })
+            .then(data => {
+                console.log('Response data:', data);
+                if (data.message) {
+                    alert('✅ ' + data.message);
+                    window.location.reload();
+                } else {
+                    console.error('No message in response:', data);
+                    alert('Error: No success message received');
+                }
+            })
+            .catch(error => {
+                console.error('Error in updateStatus:', error);
+                alert('Error updating status. Please try again.');
+            });
+        }
+
+        function createGoogleTask() {
+            console.log('createGoogleTask function called');
+            // Show the modal
+            const modal = document.getElementById('create-task-modal');
+            console.log('Modal element:', modal);
+            if (modal) {
+                modal.classList.remove('hidden');
+                console.log('Modal should now be visible');
+                
+                // Set default values
+                const titleField = document.getElementById('task-title');
+                const notesField = document.getElementById('task-notes');
+                const dueDateField = document.getElementById('task-due-date');
+                
+                console.log('Form fields found:', {
+                    title: !!titleField,
+                    notes: !!notesField,
+                    dueDate: !!dueDateField
+                });
+                
+                if (titleField) titleField.value = {!! json_encode($ticket->subject) !!};
+                if (notesField) notesField.value = {!! json_encode(\Illuminate\Support\Str::limit($ticket->original_content, 200)) !!};
+                if (dueDateField) dueDateField.value = '';
+            } else {
+                console.error('Create task modal not found!');
+                alert('Error: Create task modal not found');
+            }
+        }
+
+        function deleteTicket() {
+            console.log('deleteTicket function called');
+            showDeleteModal();
+        }
+
+        function showDeleteModal() {
+            console.log('showDeleteModal function called');
+            const modal = document.getElementById('delete-modal');
+            console.log('Delete modal element:', modal);
+            if (modal) {
+                modal.classList.remove('hidden');
+                console.log('Delete modal should now be visible');
+            } else {
+                console.error('Delete modal not found!');
+                alert('Error: Delete modal not found');
+            }
+        }
+
+        function hideDeleteModal() {
+            const modal = document.getElementById('delete-modal');
+            modal.classList.add('hidden');
+        }
+
+        function confirmDeleteTicket() {
+            hideDeleteModal();
+            
+            fetch('{{ route("tickets.destroy", $ticket) }}', {
+                method: 'DELETE',
+                headers: {
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Accept': 'application/json',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.message) {
+                    // Show success message
+                    const successMessage = document.createElement('div');
+                    successMessage.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';
+                    successMessage.textContent = '✅ ' + data.message;
+                    document.body.appendChild(successMessage);
+                    
+                    setTimeout(() => {
+                        if (successMessage.parentNode) {
+                            successMessage.parentNode.removeChild(successMessage);
+                        }
+                    }, 2000);
+                    
+                    // Redirect to tickets index page after successful deletion
+                    setTimeout(() => {
+                        window.location.href = '{{ route("tickets.index") }}';
+                    }, 1000);
+                }
+            })
+            .catch(error => {
+                console.error('Error deleting ticket:', error);
+                alert('Error deleting ticket. Please try again.');
+            });
+        }
+
+        function showNotesModal(noteId = null) {
+            console.log('showNotesModal called with noteId:', noteId);
+            const modal = document.getElementById('notes-modal');
+            const form = document.getElementById('notes-form');
+            const title = document.getElementById('notes-modal-title');
+            const content = document.getElementById('note-content');
+            const type = document.getElementById('note-type');
+            const isPrivate = document.getElementById('note-private');
+            const noteIdField = document.getElementById('note-id');
+            
+            console.log('Modal element:', modal);
+            console.log('Form element:', form);
+            
+            if (!modal) {
+                console.error('Notes modal not found!');
+                return;
+            }
+            
+            // Reset form
+            if (form) {
+                form.reset();
+            }
+            if (noteIdField) {
+                noteIdField.value = '';
+            }
+            
+            if (noteId) {
+                // Edit mode
+                if (title) title.textContent = 'Edit Note';
+                // Load note data (you would need to implement this)
+                loadNoteData(noteId);
+            } else {
+                // Add mode
+                if (title) title.textContent = 'Add Note';
+            }
+            
+            modal.classList.remove('hidden');
+            console.log('Modal should now be visible');
+            
+            if (content) {
+                content.focus();
+            }
+        }
+
+        function hideNotesModal() {
+            const modal = document.getElementById('notes-modal');
+            modal.classList.add('hidden');
+        }
+
+        function hideCreateTaskModal() {
+            const modal = document.getElementById('create-task-modal');
+            modal.classList.add('hidden');
+        }
+
         // Move showReplyForm to global scope
         function showReplyForm() {
             console.log('=== SHOW REPLY FORM START ===');
@@ -923,7 +1106,7 @@
                 aiRewriteReplyBtn.addEventListener('click', function() {
                     const replyMessageTextarea = document.getElementById('reply-message');
                     const message = replyMessageTextarea.value.trim();
-                    const subject = '{{ $ticket->subject }}'; // Use ticket subject as context
+                    const ticketSubject = '{{ $ticket->subject }}'; // Use ticket subject as context
 
                     if (!message) {
                         alert('Please enter a reply message to rewrite.');
@@ -949,7 +1132,7 @@
                         },
                         body: JSON.stringify({
                             message: message,
-                            subject: subject
+                            subject: ticketSubject
                         })
                     })
                     .then(response => {
@@ -990,6 +1173,8 @@
                         console.error('Error:', error);
                         if (error.message.includes('500')) {
                             alert('AI service is currently unavailable. Please try again later or check your API configuration.');
+                        } else if (error.message.includes('overloaded') || error.message.includes('503')) {
+                            alert('AI service is currently overloaded. Please try again in a few minutes.');
                         } else {
                             alert('Failed to rewrite message. Please try again.');
                         }
@@ -1042,17 +1227,6 @@
             if (createTaskForm) {
                 createTaskForm.addEventListener('submit', handleCreateTaskSubmit);
             }
-
-            // Expose UI-interactive functions to global scope for inline event handlers
-            window.editTicket = editTicket;
-            window.hideReplyForm = hideReplyForm;
-            window.clearDraftReply = clearDraftReply;
-            window.showNotesModal = showNotesModal;
-            window.deleteTicket = deleteTicket;
-            window.updateStatus = updateStatus;
-            window.createGoogleTask = createGoogleTask;
-            window.showReplyForm = showReplyForm;
-            console.log('Global functions exposed to window object');
 
             // Add event listener for reply form buttons
             const clearDraftBtn = document.getElementById('clear-draft-btn');
@@ -1142,12 +1316,12 @@
             // Client-side validation
             const message = formData.get('message');
             const to = formData.get('to');
-            const subject = formData.get('subject');
+            const replySubject = formData.get('subject');
             
             console.log('Validation values:');
             console.log('message:', message);
             console.log('to:', to);
-            console.log('subject:', subject);
+            console.log('subject:', replySubject);
             
             if (!message || !message.trim()) {
                 console.error('Validation failed: Empty message');
@@ -1163,7 +1337,7 @@
                 return;
             }
             
-            if (!subject || !subject.trim()) {
+            if (!replySubject || !replySubject.trim()) {
                 console.error('Validation failed: Empty subject');
                 alert('Please enter a subject.');
                 document.getElementById('reply-subject').focus();
@@ -1233,30 +1407,30 @@
             // Show confirmation dialog
             const toEmail = formData.get('to');
             const ccEmails = formData.get('cc') || '';
-            const subject = formData.get('subject');
-            const message = formData.get('message');
+            const confirmSubject = formData.get('subject');
+            const confirmMessage = formData.get('message');
             
             const recipientCount = 1 + (ccEmails ? ccEmails.split(',').length : 0);
-            const messageLength = message.length;
+            const messageLength = confirmMessage.length;
             
             console.log('Confirmation dialog data:');
             console.log('To:', toEmail);
             console.log('CC:', ccEmails);
-            console.log('Subject:', subject);
+            console.log('Subject:', confirmSubject);
             console.log('Recipient count:', recipientCount);
             console.log('Message length:', messageLength);
             
-            let confirmMessage = `Are you sure you want to send this reply?\n\n`;
-            confirmMessage += `To: ${toEmail}\n`;
+            let confirmMessageText = `Are you sure you want to send this reply?\n\n`;
+            confirmMessageText += `To: ${toEmail}\n`;
             if (ccEmails) {
-                confirmMessage += `CC: ${ccEmails}\n`;
+                confirmMessageText += `CC: ${ccEmails}\n`;
             }
-            confirmMessage += `Subject: ${subject}\n`;
-            confirmMessage += `Recipients: ${recipientCount}\n`;
-            confirmMessage += `Message length: ${messageLength} characters\n\n`;
-            confirmMessage += `This action cannot be undone.`;
+            confirmMessageText += `Subject: ${confirmSubject}\n`;
+            confirmMessageText += `Recipients: ${recipientCount}\n`;
+            confirmMessageText += `Message length: ${messageLength} characters\n\n`;
+            confirmMessageText += `This action cannot be undone.`;
             
-            if (!confirm(confirmMessage)) {
+            if (!confirm(confirmMessageText)) {
                 console.log('User cancelled reply submission');
                 return;
             }
@@ -1269,9 +1443,9 @@
 
             // Additional debugging
             console.log('Form validation passed');
-            console.log('Message length:', message.length);
-            console.log('To email:', to);
-            console.log('Subject:', subject);
+            console.log('Message length:', confirmMessage.length);
+            console.log('To email:', toEmail);
+            console.log('Subject:', confirmSubject);
             console.log('CSRF Token:', '{{ csrf_token() }}');
             console.log('Request URL:', '{{ route("tickets.reply", $ticket) }}');
 
@@ -1453,48 +1627,6 @@
             });
         }
 
-        function updateStatus(status) {
-            fetch('{{ route("tickets.update", $ticket) }}', {
-                method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
-                },
-                body: JSON.stringify({
-                    status: status
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.message) {
-                    alert('✅ ' + data.message);
-                    window.location.reload();
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('Error updating status. Please try again.');
-            });
-        }
-
-        function createGoogleTask() {
-            // Show the modal
-            const modal = document.getElementById('create-task-modal');
-            modal.classList.remove('hidden');
-            
-            // Set default values
-            document.getElementById('task-title').value = {!! json_encode($ticket->subject) !!};
-            document.getElementById('task-notes').value = {!! json_encode(\Illuminate\Support\Str::limit($ticket->original_content, 200)) !!};
-            document.getElementById('task-due-date').value = '';
-        }
-
-        function hideCreateTaskModal() {
-            const modal = document.getElementById('create-task-modal');
-            modal.classList.add('hidden');
-        }
-
         function handleCreateTaskSubmit(e) {
             e.preventDefault();
             
@@ -1590,56 +1722,6 @@
             const replyMessage = document.getElementById('reply-message').value;
             const charCount = replyMessage.length;
             document.getElementById('char-count').textContent = charCount;
-        }
-
-        // Notes functionality
-        function showNotesModal(noteId = null) {
-            console.log('showNotesModal called with noteId:', noteId);
-            const modal = document.getElementById('notes-modal');
-            const form = document.getElementById('notes-form');
-            const title = document.getElementById('notes-modal-title');
-            const content = document.getElementById('note-content');
-            const type = document.getElementById('note-type');
-            const isPrivate = document.getElementById('note-private');
-            const noteIdField = document.getElementById('note-id');
-            
-            console.log('Modal element:', modal);
-            console.log('Form element:', form);
-            
-            if (!modal) {
-                console.error('Notes modal not found!');
-                return;
-            }
-            
-            // Reset form
-            if (form) {
-                form.reset();
-            }
-            if (noteIdField) {
-                noteIdField.value = '';
-            }
-            
-            if (noteId) {
-                // Edit mode
-                if (title) title.textContent = 'Edit Note';
-                // Load note data (you would need to implement this)
-                loadNoteData(noteId);
-            } else {
-                // Add mode
-                if (title) title.textContent = 'Add Note';
-            }
-            
-            modal.classList.remove('hidden');
-            console.log('Modal should now be visible');
-            
-            if (content) {
-                content.focus();
-            }
-        }
-
-        function hideNotesModal() {
-            const modal = document.getElementById('notes-modal');
-            modal.classList.add('hidden');
         }
 
         function loadNoteData(noteId) {
@@ -1743,57 +1825,6 @@
             .finally(() => {
                 submitButton.textContent = originalText;
                 submitButton.disabled = false;
-            });
-        }
-
-        function deleteTicket() {
-            showDeleteModal();
-        }
-
-        function showDeleteModal() {
-            const modal = document.getElementById('delete-modal');
-            modal.classList.remove('hidden');
-        }
-
-        function hideDeleteModal() {
-            const modal = document.getElementById('delete-modal');
-            modal.classList.add('hidden');
-        }
-
-        function confirmDeleteTicket() {
-            hideDeleteModal();
-            
-            fetch('{{ route("tickets.destroy", $ticket) }}', {
-                method: 'DELETE',
-                headers: {
-                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
-                    'Accept': 'application/json',
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.message) {
-                    // Show success message
-                    const successMessage = document.createElement('div');
-                    successMessage.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';
-                    successMessage.textContent = '✅ ' + data.message;
-                    document.body.appendChild(successMessage);
-                    
-                    setTimeout(() => {
-                        if (successMessage.parentNode) {
-                            successMessage.parentNode.removeChild(successMessage);
-                        }
-                    }, 2000);
-                    
-                    // Redirect to tickets index page after successful deletion
-                    setTimeout(() => {
-                        window.location.href = '{{ route("tickets.index") }}';
-                    }, 1000);
-                }
-            })
-            .catch(error => {
-                console.error('Error deleting ticket:', error);
-                alert('Error deleting ticket. Please try again.');
             });
         }
     </script>

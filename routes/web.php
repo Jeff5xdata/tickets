@@ -10,6 +10,7 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\EmailSignatureController;
 use App\Http\Controllers\PushSubscriptionController;
 use App\Http\Controllers\AttachmentController;
+use App\Http\Controllers\SettingsController;
 
 Route::view('/', 'welcome');
 
@@ -35,6 +36,13 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'delete'])->name('profile.destroy');
+
+    // Settings Routes
+    Route::get('/settings', [SettingsController::class, 'index'])->name('settings.index');
+    Route::post('/settings', [SettingsController::class, 'update'])->name('settings.update');
+    Route::post('/settings/reset', [SettingsController::class, 'resetToDefaults'])->name('settings.reset');
+    Route::get('/settings/export', [SettingsController::class, 'export'])->name('settings.export');
+    Route::post('/settings/import', [SettingsController::class, 'import'])->name('settings.import');
 
     // Push Subscription Routes
     Route::get('/push-subscriptions', [PushSubscriptionController::class, 'index'])->name('push-subscriptions.index');

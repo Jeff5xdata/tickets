@@ -47,32 +47,75 @@ class AiRewritingService
 
         $prompt = $this->generatePrompt($subject);
         
-        $response = Http::withHeaders([
-            'Content-Type' => 'application/json',
-        ])->post($this->baseUrl . '?key=' . $this->apiKey, [
-            'contents' => [
-                [
-                    'parts' => [
-                        [
-                            'text' => $prompt . "\n\nOriginal email:\n" . $content
+        // Retry mechanism for overload errors
+        $maxRetries = 2;
+        $retryDelay = 2; // seconds
+        
+        for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
+            $response = Http::withHeaders([
+                'Content-Type' => 'application/json',
+            ])->post($this->baseUrl . '?key=' . $this->apiKey, [
+                'contents' => [
+                    [
+                        'parts' => [
+                            [
+                                'text' => $prompt . "\n\nOriginal email:\n" . $content
+                            ]
                         ]
                     ]
+                ],
+                'generationConfig' => [
+                    'temperature' => 0.7,
+                    'topK' => 40,
+                    'topP' => 0.95,
+                    'maxOutputTokens' => 2048,
                 ]
-            ],
-            'generationConfig' => [
-                'temperature' => 0.7,
-                'topK' => 40,
-                'topP' => 0.95,
-                'maxOutputTokens' => 2048,
-            ]
-        ]);
+            ]);
 
-        if ($response->successful()) {
-            $result = $response->json();
-            return $result['candidates'][0]['content']['parts'][0]['text'] ?? $content;
+            if ($response->successful()) {
+                $result = $response->json();
+                return $result['candidates'][0]['content']['parts'][0]['text'] ?? $content;
+            }
+
+            // Handle specific error cases
+            $errorBody = $response->json();
+            $errorMessage = $errorBody['error']['message'] ?? 'Unknown error';
+            $errorCode = $errorBody['error']['code'] ?? 0;
+            $errorStatus = $errorBody['error']['status'] ?? '';
+
+            // Check for overload error
+            if ($errorCode === 503 && $errorStatus === 'UNAVAILABLE' && str_contains($errorMessage, 'overloaded')) {
+                if ($attempt < $maxRetries) {
+                    Log::warning("Gemini API is overloaded, retrying in {$retryDelay} seconds (attempt {$attempt}/{$maxRetries})", [
+                        'error_code' => $errorCode,
+                        'error_status' => $errorStatus,
+                        'error_message' => $errorMessage,
+                        'attempt' => $attempt
+                    ]);
+                    sleep($retryDelay);
+                    continue;
+                } else {
+                    Log::warning('Gemini API is overloaded after all retries, returning original content', [
+                        'error_code' => $errorCode,
+                        'error_status' => $errorStatus,
+                        'error_message' => $errorMessage,
+                        'attempts' => $maxRetries
+                    ]);
+                    return $content; // Return original content when API is overloaded after retries
+                }
+            }
+
+            // For other errors, don't retry
+            Log::error('Gemini API error: ' . $response->body(), [
+                'error_code' => $errorCode,
+                'error_status' => $errorStatus,
+                'error_message' => $errorMessage,
+                'attempt' => $attempt
+            ]);
+            
+            return $content;
         }
 
-        Log::error('Gemini API error: ' . $response->body());
         return $content;
     }
 
@@ -114,7 +157,29 @@ class AiRewritingService
             return $result['candidates'][0]['content']['parts'][0]['text'] ?? '';
         }
 
-        Log::error('Gemini API error: ' . $response->body());
+        // Handle specific error cases
+        $errorBody = $response->json();
+        $errorMessage = $errorBody['error']['message'] ?? 'Unknown error';
+        $errorCode = $errorBody['error']['code'] ?? 0;
+        $errorStatus = $errorBody['error']['status'] ?? '';
+
+        // Check for overload error
+        if ($errorCode === 503 && $errorStatus === 'UNAVAILABLE' && str_contains($errorMessage, 'overloaded')) {
+            Log::warning('Gemini API is overloaded, returning empty response', [
+                'error_code' => $errorCode,
+                'error_status' => $errorStatus,
+                'error_message' => $errorMessage
+            ]);
+            return ''; // Return empty when API is overloaded
+        }
+
+        // Log other errors
+        Log::error('Gemini API error: ' . $response->body(), [
+            'error_code' => $errorCode,
+            'error_status' => $errorStatus,
+            'error_message' => $errorMessage
+        ]);
+        
         return '';
     }
 
@@ -151,7 +216,29 @@ class AiRewritingService
             return $result['candidates'][0]['content']['parts'][0]['text'] ?? '';
         }
 
-        Log::error('Gemini API error: ' . $response->body());
+        // Handle specific error cases
+        $errorBody = $response->json();
+        $errorMessage = $errorBody['error']['message'] ?? 'Unknown error';
+        $errorCode = $errorBody['error']['code'] ?? 0;
+        $errorStatus = $errorBody['error']['status'] ?? '';
+
+        // Check for overload error
+        if ($errorCode === 503 && $errorStatus === 'UNAVAILABLE' && str_contains($errorMessage, 'overloaded')) {
+            Log::warning('Gemini API is overloaded, returning empty summary', [
+                'error_code' => $errorCode,
+                'error_status' => $errorStatus,
+                'error_message' => $errorMessage
+            ]);
+            return ''; // Return empty when API is overloaded
+        }
+
+        // Log other errors
+        Log::error('Gemini API error: ' . $response->body(), [
+            'error_code' => $errorCode,
+            'error_status' => $errorStatus,
+            'error_message' => $errorMessage
+        ]);
+        
         return '';
     }
 
@@ -197,7 +284,29 @@ class AiRewritingService
             }
         }
 
-        Log::error('Gemini API error: ' . $response->body());
+        // Handle specific error cases
+        $errorBody = $response->json();
+        $errorMessage = $errorBody['error']['message'] ?? 'Unknown error';
+        $errorCode = $errorBody['error']['code'] ?? 0;
+        $errorStatus = $errorBody['error']['status'] ?? '';
+
+        // Check for overload error
+        if ($errorCode === 503 && $errorStatus === 'UNAVAILABLE' && str_contains($errorMessage, 'overloaded')) {
+            Log::warning('Gemini API is overloaded, returning empty action items', [
+                'error_code' => $errorCode,
+                'error_status' => $errorStatus,
+                'error_message' => $errorMessage
+            ]);
+            return []; // Return empty array when API is overloaded
+        }
+
+        // Log other errors
+        Log::error('Gemini API error: ' . $response->body(), [
+            'error_code' => $errorCode,
+            'error_status' => $errorStatus,
+            'error_message' => $errorMessage
+        ]);
+        
         return [];
     }
 

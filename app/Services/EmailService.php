@@ -300,14 +300,16 @@ class EmailService
                     ];
                     
                     // Try to get attachment data
+                    $attachmentData = null;
+                    
                     if ($part->getBody()->getData()) {
                         // Direct data available
-                        $attachment['data'] = $this->base64url_decode($part->getBody()->getData());
+                        $attachmentData = $this->base64url_decode($part->getBody()->getData());
                         Log::info('Gmail attachment data extracted from body', [
                             'filename' => $attachment['name'],
                             'size' => $attachment['size'],
                             'type' => $attachment['type'],
-                            'data_length' => strlen($attachment['data'])
+                            'data_length' => strlen($attachmentData)
                         ]);
                     } elseif ($part->getBody()->getAttachmentId() && $gmailService && $messageId) {
                         // Attachment ID available - fetch the attachment separately
@@ -320,7 +322,6 @@ class EmailService
                         
                         $attachmentData = $this->fetchGmailAttachment($gmailService, $messageId, $part->getBody()->getAttachmentId());
                         if ($attachmentData) {
-                            $attachment['data'] = $attachmentData;
                             Log::info('Gmail attachment data fetched successfully', [
                                 'filename' => $attachment['name'],
                                 'data_length' => strlen($attachmentData)
@@ -343,30 +344,35 @@ class EmailService
                         continue;
                     }
                     
-                    // Extract Content-ID for inline attachments
-                    if ($part->getHeaders()) {
-                        foreach ($part->getHeaders() as $header) {
-                            if (strtolower($header->getName()) === 'content-id') {
-                                $contentId = trim($header->getValue(), '<>');
-                                $attachment['content_id'] = $contentId;
-                                Log::info('Gmail attachment has content ID', [
-                                    'filename' => $attachment['name'],
-                                    'content_id' => $contentId
-                                ]);
-                                break;
+                    // Only add attachment if we have data
+                    if ($attachmentData) {
+                        $attachment['data'] = $attachmentData;
+                        
+                        // Extract Content-ID for inline attachments
+                        if ($part->getHeaders()) {
+                            foreach ($part->getHeaders() as $header) {
+                                if (strtolower($header->getName()) === 'content-id') {
+                                    $contentId = trim($header->getValue(), '<>');
+                                    $attachment['content_id'] = $contentId;
+                                    Log::info('Gmail attachment has content ID', [
+                                        'filename' => $attachment['name'],
+                                        'content_id' => $contentId
+                                    ]);
+                                    break;
+                                }
                             }
                         }
+                        
+                        // Check if this is an inline attachment
+                        if ($part->getBody()->getAttachmentId()) {
+                            $attachment['is_inline'] = true;
+                            Log::info('Gmail attachment is inline', [
+                                'filename' => $attachment['name']
+                            ]);
+                        }
+                        
+                        $attachments[] = $attachment;
                     }
-                    
-                    // Check if this is an inline attachment
-                    if ($part->getBody()->getAttachmentId()) {
-                        $attachment['is_inline'] = true;
-                        Log::info('Gmail attachment is inline', [
-                            'filename' => $attachment['name']
-                        ]);
-                    }
-                    
-                    $attachments[] = $attachment;
                 }
             }
         }
@@ -461,6 +467,9 @@ class EmailService
     {
         $bodyData = $this->extractOutlookBody($message['body']);
         
+        // Add access token to message for attachment fetching
+        $message['_access_token'] = $emailAccount->access_token;
+        
         $emailData = [
             'from_email' => $message['from']['emailAddress']['address'] ?? '',
             'from_name' => $message['from']['emailAddress']['name'] ?? '',
@@ -511,15 +520,93 @@ class EmailService
         $attachments = [];
         
         if (($message['hasAttachments'] ?? false) && isset($message['id'])) {
-            // Fetch attachments if needed
-            // This would require an additional API call to get attachment details
-            // For now, we'll just note that attachments exist
-            $attachments[] = [
-                'name' => 'Attachment (details not fetched)',
-                'size' => 0,
-                'type' => 'unknown',
-            ];
+            Log::info('Outlook message has attachments, fetching details', [
+                'message_id' => $message['id'],
+                'subject' => $message['subject'] ?? 'No subject'
+            ]);
+            
+            try {
+                // Fetch attachment details from Microsoft Graph API
+                $client = new \GuzzleHttp\Client();
+                $url = "https://graph.microsoft.com/v1.0/me/messages/{$message['id']}/attachments";
+                
+                $response = $client->request('GET', $url, [
+                    'headers' => [
+                        'Authorization' => 'Bearer ' . $message['_access_token'] ?? '', // We'll need to pass this
+                        'Accept' => 'application/json',
+                    ],
+                    'http_errors' => false,
+                ]);
+                
+                if ($response->getStatusCode() === 200) {
+                    $attachmentData = json_decode($response->getBody()->getContents(), true);
+                    
+                    foreach ($attachmentData['value'] as $attachment) {
+                        Log::info('Processing Outlook attachment', [
+                            'name' => $attachment['name'],
+                            'size' => $attachment['size'],
+                            'content_type' => $attachment['contentType'],
+                            'is_inline' => $attachment['isInline'] ?? false,
+                            'has_content_id' => isset($attachment['contentId'])
+                        ]);
+                        
+                        $attachmentInfo = [
+                            'name' => $attachment['name'],
+                            'size' => $attachment['size'],
+                            'type' => $attachment['contentType'],
+                        ];
+                        
+                        // Extract content bytes if available
+                        if (isset($attachment['contentBytes'])) {
+                            $attachmentInfo['data'] = base64_decode($attachment['contentBytes']);
+                            Log::info('Outlook attachment data extracted', [
+                                'name' => $attachment['name'],
+                                'data_length' => strlen($attachmentInfo['data'])
+                            ]);
+                        } else {
+                            Log::warning('Outlook attachment missing content bytes', [
+                                'name' => $attachment['name']
+                            ]);
+                            continue; // Skip attachments without data
+                        }
+                        
+                        // Extract Content-ID for inline attachments
+                        if (isset($attachment['contentId'])) {
+                            $attachmentInfo['content_id'] = trim($attachment['contentId'], '<>');
+                            Log::info('Outlook attachment has content ID', [
+                                'name' => $attachment['name'],
+                                'content_id' => $attachmentInfo['content_id']
+                            ]);
+                        }
+                        
+                        // Check if this is an inline attachment
+                        if ($attachment['isInline'] ?? false) {
+                            $attachmentInfo['is_inline'] = true;
+                            Log::info('Outlook attachment is inline', [
+                                'name' => $attachment['name']
+                            ]);
+                        }
+                        
+                        $attachments[] = $attachmentInfo;
+                    }
+                } else {
+                    Log::warning('Failed to fetch Outlook attachments', [
+                        'message_id' => $message['id'],
+                        'status_code' => $response->getStatusCode(),
+                        'response' => (string) $response->getBody()
+                    ]);
+                }
+            } catch (\Exception $e) {
+                Log::error('Exception while fetching Outlook attachments', [
+                    'message_id' => $message['id'],
+                    'error' => $e->getMessage()
+                ]);
+            }
         }
+        
+        Log::info('Outlook attachment extraction completed', [
+            'total_attachments_found' => count($attachments)
+        ]);
         
         return $attachments;
     }
@@ -573,6 +660,15 @@ class EmailService
                 'has_content' => $attachment->getContent() ? 'yes' : 'no',
                 'content_length' => $attachment->getContent() ? strlen($attachment->getContent()) : 0
             ]);
+
+            // Skip attachments without content
+            if (!$attachment->getContent()) {
+                Log::warning('IMAP attachment has no content, skipping', [
+                    'name' => $attachment->getName(),
+                    'size' => $attachment->getSize()
+                ]);
+                continue;
+            }
 
             $attachmentData = [
                 'name' => $attachment->getName(),

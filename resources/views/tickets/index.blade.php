@@ -22,8 +22,9 @@
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
             <!-- Filters -->
             <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg mb-6">
+
                 <div class="p-6">
-                    <form method="GET" action="{{ route('tickets.index') }}" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <form method="GET" action="{{ route('tickets.index') }}" class="grid grid-cols-1 md:grid-cols-5 gap-4">
                         <div>
                             <label for="status" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Status</label>
                             <select name="status" id="status" class="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
@@ -58,23 +59,36 @@
                         </div>
                         
                         <div>
+                            <label for="sort" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Sort By</label>
+                            <select name="sort" id="sort" class="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                                @foreach($ticketSorts as $value => $label)
+                                    <option value="{{ $value }}" {{ $sortPreference === $value ? 'selected' : '' }}>{{ $label }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        
+                        <div>
                             <label for="search" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Search</label>
                             <input type="text" name="search" id="search" value="{{ request('search') }}" placeholder="Search tickets..." class="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
                         </div>
-                        
-                        <div class="md:col-span-4 flex justify-end space-x-2">
-                            <button type="submit" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
-                                Filter
-                            </button>
-                            @if($tickets->total() > 0)
-                                <button type="button" onclick="deleteFilteredTickets({{ $tickets->total() }})" class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">
-                                    Delete Filtered ({{ $tickets->total() }})
-                                </button>
-                            @endif
-                        </div>
+                </div>
+
+                    <div class="flex justify-end">
+
+                    @if($tickets->total() > 0)
+                        <button type="button" onclick="deleteFilteredTickets({{ $tickets->total() }})" 
+                            class="text-nowrap bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded mb-2">
+                            Delete Filtered ({{ $tickets->total() }})
+                        </button>
+                    @endif
+
+                    <button type="submit" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mb-2 mr-4 ml-4">
+                        Filter
+                    </button>
+
+                    </div>
                     </form>
                 </div>
-            </div>
 
             <!-- Tickets List -->
             <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">

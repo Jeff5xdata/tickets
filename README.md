@@ -11,6 +11,7 @@ A comprehensive Laravel-based email ticket management system with AI-powered fea
 -   **Dark Mode**: Full dark/light mode toggle with persistent preferences
 -   **Responsive Design**: Mobile-friendly interface built with Tailwind CSS
 -   **Progressive Web App (PWA)**: Installable app with offline support and push notifications
+-   **Ticket Visibility Control**: Customize ticket display preferences including the ability to show/hide closed tickets
 
 ### AI-Powered Features
 
@@ -314,10 +315,45 @@ chmod +x setup_cron.sh
     - Set priority and due date
 
 3. **Reply to Tickets**
+
     - Open a ticket
     - Use the reply form
     - Include original email context if needed
     - Send reply through connected email account
+
+4. **Show Closed Tickets**
+
+    - Use the filter option to show closed tickets
+    - Click on a ticket to view its details
+
+### Ticket Settings and Preferences
+
+1. **Access Ticket Settings**
+
+    - Go to "Settings" in the navigation
+    - Click on the "Tickets" tab in the settings panel
+
+2. **Configure Ticket Display**
+
+    - **Show Closed Tickets**: Toggle this option to control whether closed tickets appear in your tickets list and dashboard
+    - **Default Status**: Set the default status for new tickets (Open, In Progress, Waiting, Resolved, Closed)
+    - **Default Priority**: Set the default priority for new tickets (Low, Medium, High, Urgent)
+    - **Tickets per Page**: Configure how many tickets to display per page (5-100)
+    - **Default Display Format**: Choose between HTML or Plain Text format for ticket content
+    - **Default Sort Order**: Set your preferred sort order for the tickets list
+    - **Show Ticket Preview**: Enable/disable ticket preview in the list view
+    - **Enable Ticket Search**: Toggle search functionality for tickets
+
+3. **Automation Settings**
+
+    - **Auto Create Tasks**: Automatically create Google Tasks from new tickets
+    - **Auto Assign Tickets**: Automatically assign new tickets to yourself
+
+4. **Dashboard Integration**
+
+    - Ticket visibility preferences are automatically applied to the dashboard
+    - Recent tickets section respects the "Show Closed Tickets" setting
+    - Total tickets count reflects your visibility preferences
 
 ### Calendar Management
 
@@ -400,7 +436,14 @@ chmod +x setup_cron.sh
     - Duplicate tasks for similar workflows
     - Set up task hierarchies with parent and subtasks
 
-4. **Auto-Save Feature**
+4. **Sort Tasks**
+
+    - Sort tasks by Due Date, Title, Task List, or Created Date (ascending or descending)
+    - Set your default sort order in Settings > Tasks
+    - Change sort order on the fly in the Google Tasks list using the 'Sort By' dropdown
+    - Tasks with no due date are always shown last when sorting by due date
+
+5. **Auto-Save Feature**
     - Tasks automatically save as you type (every 2 seconds)
     - No need to manually save while editing
     - Draft changes are preserved even if you navigate away
@@ -605,6 +648,17 @@ For support and questions:
 -   Google Tasks integration
 -   AI-powered email features
 -   Multi-account email support
+
+### Version NEXT
+
+-   **Google Tasks Sorting**: Added ability to sort tasks by due date, title, task list, or created date (ascending/descending). Default sort order can be set in user settings. Tasks with no due date are always shown last when sorting by due date.
+
+### Version 1.4.0
+
+-   **Ticket Visibility Control**: Added "Show Closed Tickets" preference allowing users to control whether closed tickets appear in their tickets list and dashboard
+-   **Enhanced Dashboard**: Dashboard statistics and recent tickets now respect user's ticket visibility preferences
+-   **Improved User Experience**: More granular control over ticket display settings with persistent user preferences
+-   **Consistent Filtering**: Ticket visibility settings are consistently applied across tickets list, dashboard, and background refresh functionality
 
 ---
 

@@ -354,6 +354,8 @@
                         console.error('Error:', error);
                         if (error.message.includes('500')) {
                             alert('AI service is currently unavailable. Please try again later or check your API configuration.');
+                        } else if (error.message.includes('overloaded') || error.message.includes('503')) {
+                            alert('AI service is currently overloaded. Please try again in a few minutes.');
                         } else {
                             alert('Failed to rewrite message. Please try again.');
                         }

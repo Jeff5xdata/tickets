@@ -96,4 +96,20 @@ class User extends Authenticatable
     {
         return $this->notifications();
     }
+
+    /**
+     * Get the user's preferences.
+     */
+    public function preferences()
+    {
+        return $this->hasOne(UserPreference::class);
+    }
+
+    /**
+     * Get or create user preferences
+     */
+    public function getPreferences(): UserPreference
+    {
+        return UserPreference::getForUser($this);
+    }
 }

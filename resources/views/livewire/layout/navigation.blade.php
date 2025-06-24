@@ -7,20 +7,20 @@
             <!-- Navigation Links -->
                 <div class="hidden space-x-8 sm:-my-px sm:ml-10 sm:flex">
                     @if (url()->current() != route('dashboard'))
-                    <x-nav-link href="{{ route('dashboard') }}" :active="request()->routeIs('dashboard')" class="dark:text-gray-300 dark:hover:text-white">
+                    <x-nav-link href="{{ route('dashboard') }}" :active="request()->routeIs('dashboard')" class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors">
                         {{ __('Dashboard') }}
                     </x-nav-link>
                     @endif
                     
-                    <x-nav-link href="{{ route('tickets.index') }}" :active="request()->routeIs('tickets.*')" class="dark:text-gray-300 dark:hover:text-white">
+                    <x-nav-link href="{{ route('tickets.index') }}" :active="request()->routeIs('tickets.*')" class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors">
                         {{ __('Tickets') }}
                     </x-nav-link>
 
-                    <x-nav-link href="{{ route('google-tasks.index') }}" :active="request()->routeIs('google-tasks.*')" class="dark:text-gray-300 dark:hover:text-white">
+                    <x-nav-link href="{{ route('google-tasks.index') }}" :active="request()->routeIs('google-tasks.*')" class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors">
                         {{ __('Tasks') }}
                     </x-nav-link>
 
-                    <x-nav-link href="{{ route('calendar-events.index') }}" :active="request()->routeIs('calendar-events.*')" class="dark:text-gray-300 dark:hover:text-white">
+                    <x-nav-link href="{{ route('calendar-events.index') }}" :active="request()->routeIs('calendar-events.*')" class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors">
                         {{ __('Calendar') }}
                     </x-nav-link>
                 </div>
@@ -36,13 +36,16 @@
                             </svg>
                         </button>
                         <div x-show="open" @click.away="open = false" class="absolute right-0 mt-2 w-48 rounded-md shadow-lg z-50 bg-white dark:bg-gray-800 py-1">
-                            <x-dropdown-link href="{{ route('email-rules.index') }}" :active="request()->routeIs('email-rules.*')">
+                            <x-dropdown-link href="{{ route('settings.index') }}" :active="request()->routeIs('settings.*')" class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors">
+                                {{ __('Settings') }}
+                            </x-dropdown-link>
+                            <x-dropdown-link href="{{ route('email-rules.index') }}" :active="request()->routeIs('email-rules.*')" class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors">
                                 {{ __('Email Rules') }}
                             </x-dropdown-link>
-                            <x-dropdown-link href="{{ route('email-accounts.signatures.index') }}" :active="request()->routeIs('email-accounts.signatures.*')">
+                            <x-dropdown-link href="{{ route('email-accounts.signatures.index') }}" :active="request()->routeIs('email-accounts.signatures.*')" class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors">
                                 {{ __('Email Signatures') }}
                             </x-dropdown-link>
-                            <x-dropdown-link href="{{ route('email-accounts.index') }}" :active="request()->routeIs('email-accounts.*')">
+                            <x-dropdown-link href="{{ route('email-accounts.index') }}" :active="request()->routeIs('email-accounts.*')" class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors">
                                 {{ __('Email Accounts') }}
                             </x-dropdown-link>
                         </div>
@@ -142,7 +145,7 @@
     </div>
 
     <!-- Responsive Navigation Menu -->
-    <div :class="{'block': open, 'hidden': ! open}" class="hidden sm:hidden">
+    <div :class="{'block': open, 'hidden': ! open}" class="hidden sm:hidden bg-white dark:bg-gray-800">
         <div class="pt-2 pb-3 space-y-1">
             <x-responsive-nav-link href="{{ route('dashboard') }}" :active="request()->routeIs('dashboard')" class="dark:text-gray-300 dark:hover:text-white">
                 {{ __('Dashboard') }}

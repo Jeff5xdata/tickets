@@ -1,4 +1,8 @@
 <x-app-layout>
+    @php
+        $userPreferences = auth()->user()->getPreferences();
+    @endphp
+    
     <x-slot name="header">
         <div class="flex justify-between items-center">
         </div>
@@ -22,7 +26,15 @@
                             </div>
                             <div class="ml-4">
                                 <div class="text-sm font-medium text-gray-500 dark:text-gray-400">Total Tickets</div>
-                                <div class="text-2xl font-semibold text-gray-900 dark:text-white">{{ auth()->user()->tickets()->count() }}</div>
+                                @php
+                                    $totalTicketsQuery = auth()->user()->tickets();
+                                    
+                                    // Filter out closed tickets if user preference is set to false
+                                    if (!$userPreferences->show_closed_tickets) {
+                                        $totalTicketsQuery->where('status', '!=', 'closed');
+                                    }
+                                @endphp
+                                <div class="text-2xl font-semibold text-gray-900 dark:text-white">{{ $totalTicketsQuery->count() }}</div>
                             </div>
                         </div>
                     </div>
@@ -157,7 +169,18 @@
                             <a href="{{ route('tickets.index') }}" class="text-sm text-blue-600 dark:text-blue-400 hover:underline">View all</a>
                         </div>
                         <div class="space-y-4">
-                            @forelse(auth()->user()->tickets()->latest()->take(5)->get() as $ticket)
+                            @php
+                                $recentTicketsQuery = auth()->user()->tickets()->latest();
+                                
+                                // Filter out closed tickets if user preference is set to false
+                                if (!$userPreferences->show_closed_tickets) {
+                                    $recentTicketsQuery->where('status', '!=', 'closed');
+                                }
+                                
+                                $recentTickets = $recentTicketsQuery->take(5)->get();
+                            @endphp
+                            
+                            @forelse($recentTickets as $ticket)
                                 <a href="{{ route('tickets.show', $ticket) }}" class="block">
                                     <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
                                         <div class="flex-1 min-w-0">
@@ -284,7 +307,8 @@
             fetch(window.location.href, {
                 method: 'GET',
                 headers: {
-                    'X-Requested-With': 'XMLHttpRequest'
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-Show-Closed-Tickets': '{{ $userPreferences->show_closed_tickets ? "true" : "false" }}'
                 }
             })
             .then(response => response.text())

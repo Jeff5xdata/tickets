@@ -48,14 +48,54 @@ class GoogleTaskController extends Controller
             });
         }
 
-        $googleTasks = $query->orderBy('due_date', 'desc')->paginate(20);
+        // Apply sorting based on user preference or request parameter
+        $sortBy = $request->get('sort', auth()->user()->getPreferences()->task_sort ?? 'due_date_desc');
+        $this->applySorting($query, $sortBy);
+
+        $googleTasks = $query->paginate(20);
         $taskLists = auth()->user()->googleTasks()
             ->select('list_id', 'list_name')
             ->whereNotNull('list_id')
             ->distinct()
             ->get();
 
-        return view('google-tasks.index', compact('googleTasks', 'taskLists'));
+        return view('google-tasks.index', compact('googleTasks', 'taskLists', 'sortBy'));
+    }
+
+    /**
+     * Apply sorting to the query based on the sort parameter
+     */
+    private function applySorting($query, string $sortBy): void
+    {
+        switch ($sortBy) {
+            case 'due_date_desc':
+                $query->orderByRaw('due_date IS NULL, due_date DESC')->orderBy('title', 'asc');
+                break;
+            case 'due_date_asc':
+                $query->orderByRaw('due_date IS NULL, due_date ASC')->orderBy('title', 'asc');
+                break;
+            case 'title_asc':
+                $query->orderBy('title', 'asc')->orderBy('due_date', 'asc');
+                break;
+            case 'title_desc':
+                $query->orderBy('title', 'desc')->orderBy('due_date', 'asc');
+                break;
+            case 'list_asc':
+                $query->orderBy('list_name', 'asc')->orderBy('title', 'asc');
+                break;
+            case 'list_desc':
+                $query->orderBy('list_name', 'desc')->orderBy('title', 'asc');
+                break;
+            case 'created_desc':
+                $query->orderBy('created_at', 'desc')->orderBy('title', 'asc');
+                break;
+            case 'created_asc':
+                $query->orderBy('created_at', 'asc')->orderBy('title', 'asc');
+                break;
+            default:
+                $query->orderByRaw('due_date IS NULL, due_date DESC')->orderBy('title', 'asc');
+                break;
+        }
     }
 
     public function create(): View
