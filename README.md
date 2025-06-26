@@ -663,3 +663,71 @@ For support and questions:
 ---
 
 **Built with ❤️ using Laravel, Tailwind CSS, and Google AI**
+
+## Push Notifications Setup
+
+The system supports real-time push notifications using the Web Push API and VAPID keys. Users receive notifications for new tickets and other events, even when the app is closed (PWA support).
+
+### Requirements
+
+-   **VAPID Keys**: Generate with `php artisan vapid:generate` and add to your `.env`:
+    -   `VAPID_SUBJECT=mailto:your-email@example.com`
+    -   `VAPID_PUBLIC_KEY=...`
+    -   `VAPID_PRIVATE_KEY=...`
+-   **HTTPS**: Required for service workers and push notifications (except localhost).
+-   **Service Worker**: Must be registered (see `public/sw.js`).
+-   **Browser Permissions**: User must grant notification permission.
+-   **Push Subscription**: User must subscribe (handled by the PWA status component and `pwa.js`).
+-   **notifications Table**: Run migrations to ensure the `notifications` table exists (required for Laravel notifications).
+
+### Setup Steps
+
+1. Generate and configure VAPID keys.
+2. Run all migrations: `php artisan migrate` (creates `notifications` and `push_subscriptions` tables).
+3. Ensure HTTPS is enabled in production.
+4. Open the app in a supported browser, enable notifications via the UI.
+5. Create a ticket or use the test endpoint to trigger a notification.
+
+### Notification System Details
+
+-   Uses a custom `WebPushChannel` for Laravel notifications.
+-   Notifications implement a `toWebPush()` method for push payloads.
+-   All notifications are stored in the `notifications` table.
+-   Subscriptions are stored in the `push_subscriptions` table.
+-   The backend uses Minishlink/WebPush for sending notifications.
+
+### Testing Push Notifications
+
+-   Use the `/test-push-notification` endpoint (development only) to trigger a test notification for the current user.
+-   Or, create a new ticket and ensure you receive a notification.
+-   Check the browser console and Laravel logs for errors.
+
+### Troubleshooting
+
+-   **No notification received?**
+    -   Check browser notification permission (must be granted).
+    -   Ensure service worker is registered and active.
+    -   Make sure you are subscribed (see PWA status component).
+    -   Check that VAPID keys are set in `.env` and `config/services.php`.
+    -   Ensure HTTPS is enabled.
+    -   Check Laravel logs (`storage/logs/laravel.log`) for push errors.
+    -   Make sure the `notifications` table exists and is migrated.
+-   **Push notification sent but not shown?**
+    -   Check browser notification settings (may be blocked or silent).
+    -   Try unsubscribing and re-subscribing.
+    -   Check for errors in the browser console.
+-   **Subscription errors?**
+    -   Ensure the VAPID public key is accessible via `/api/vapid-public-key`.
+    -   Check network connectivity and service worker registration.
+
+### Recent Fixes (June 2025)
+
+-   Fixed VAPID subject config in `WebPushService`.
+-   Added custom `WebPushChannel` for Laravel notifications.
+-   Added `toWebPush()` method to notifications.
+-   Created and migrated the `notifications` table.
+-   Improved error logging and troubleshooting steps.
+
+---
+
+For more details, see `PUSH_NOTIFICATIONS_SETUP.md` or contact the maintainer.

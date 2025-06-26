@@ -16,7 +16,7 @@ class WebPushService
     {
         $this->webPush = new WebPush([
             'VAPID' => [
-                'subject' => config('app.url'),
+                'subject' => config('services.webpush.vapid.subject'),
                 'publicKey' => config('services.webpush.vapid.public_key'),
                 'privateKey' => config('services.webpush.vapid.private_key'),
             ],

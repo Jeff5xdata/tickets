@@ -162,7 +162,7 @@
                                             <td class="px-6 py-4">
                                                 <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
                                                     @if($ticket->status === 'new') bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200
-                                                    @elseif($ticket->status === 'in_progress') bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200
+                                                    @elseif($ticket->status === 'in_progress') text-nowrap bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200
                                                     @elseif($ticket->status === 'resolved') bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200
                                                     @else bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200 @endif">
                                                     {{ ucfirst(str_replace('_', ' ', $ticket->status)) }}

@@ -30,7 +30,7 @@ class NewTicketNotification extends Notification implements ShouldQueue
      */
     public function via(object $notifiable): array
     {
-        return ['database', 'broadcast'];
+        return ['database', 'broadcast', \App\Channels\WebPushChannel::class];
     }
 
     /**
@@ -70,19 +70,32 @@ class NewTicketNotification extends Notification implements ShouldQueue
     }
 
     /**
-     * Send the notification.
+     * Get the web push representation of the notification.
      */
-    public function afterCommit(): void
+    public function toWebPush(object $notifiable): array
     {
-        // Send web push notification
-        $webPushService = app(WebPushService::class);
-        $webPushService->sendNewTicketNotification($this->ticket->user, [
-            'id' => $this->ticket->id,
-            'subject' => $this->ticket->subject,
-            'from_email' => $this->ticket->from_email,
-            'from_name' => $this->ticket->from_name,
-            'priority' => $this->ticket->priority,
-            'status' => $this->ticket->status,
-        ]);
+        return [
+            'title' => 'New Ticket Received',
+            'body' => 'New ticket: ' . $this->ticket->subject,
+            'icon' => '/images/icon-192x192.png',
+            'badge' => '/images/icon-72x72.png',
+            'data' => [
+                'type' => 'new_ticket',
+                'ticket_id' => $this->ticket->id,
+                'url' => route('tickets.show', $this->ticket->id),
+            ],
+            'actions' => [
+                [
+                    'action' => 'view',
+                    'title' => 'View',
+                    'icon' => '/images/icon-96x96.png',
+                ],
+                [
+                    'action' => 'close',
+                    'title' => 'Close',
+                    'icon' => '/images/icon-96x96.png',
+                ],
+            ],
+        ];
     }
 } 

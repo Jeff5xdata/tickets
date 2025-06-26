@@ -235,6 +235,13 @@ class EmailService
         $plainText = '';
         $htmlContent = '';
 
+        Log::info('Extracting Gmail body', [
+            'mime_type' => $payload->getMimeType(),
+            'has_body_data' => $payload->getBody()->getData() ? 'yes' : 'no',
+            'has_parts' => $payload->getParts() ? 'yes' : 'no',
+            'parts_count' => $payload->getParts() ? count($payload->getParts()) : 0
+        ]);
+
         if ($payload->getBody()->getData()) {
             $content = $this->base64url_decode($payload->getBody()->getData());
             if ($payload->getMimeType() === 'text/html') {
@@ -247,11 +254,12 @@ class EmailService
 
         if ($payload->getParts()) {
             foreach ($payload->getParts() as $part) {
-                if ($part->getMimeType() === 'text/plain' && $part->getBody()->getData()) {
-                    $plainText = $this->base64url_decode($part->getBody()->getData());
+                $partResult = $this->extractGmailBodyFromPart($part);
+                if (!empty($partResult['plain_text'])) {
+                    $plainText = $partResult['plain_text'];
                 }
-                if ($part->getMimeType() === 'text/html' && $part->getBody()->getData()) {
-                    $htmlContent = $this->base64url_decode($part->getBody()->getData());
+                if (!empty($partResult['html_content'])) {
+                    $htmlContent = $partResult['html_content'];
                 }
             }
         }
@@ -259,6 +267,73 @@ class EmailService
         // If we have HTML but no plain text, create plain text from HTML
         if (empty($plainText) && !empty($htmlContent)) {
             $plainText = strip_tags($htmlContent);
+        }
+
+        // If we still have no content, provide a default message
+        if (empty($plainText) && empty($htmlContent)) {
+            $plainText = '[Email contains only attachments or images]';
+        }
+
+        Log::info('Gmail body extraction completed', [
+            'plain_text_length' => strlen($plainText),
+            'html_content_length' => strlen($htmlContent),
+            'has_plain_text' => !empty($plainText),
+            'has_html_content' => !empty($htmlContent)
+        ]);
+
+        return [
+            'plain_text' => $plainText,
+            'html_content' => $htmlContent
+        ];
+    }
+
+    protected function extractGmailBodyFromPart($part): array
+    {
+        $plainText = '';
+        $htmlContent = '';
+
+        Log::info('Processing Gmail part for body extraction', [
+            'mime_type' => $part->getMimeType(),
+            'has_filename' => $part->getFilename() ? 'yes' : 'no',
+            'filename' => $part->getFilename(),
+            'has_body_data' => $part->getBody()->getData() ? 'yes' : 'no',
+            'has_parts' => $part->getParts() ? 'yes' : 'no',
+            'parts_count' => $part->getParts() ? count($part->getParts()) : 0
+        ]);
+
+        // Handle multipart types recursively
+        if (str_starts_with($part->getMimeType(), 'multipart/') && $part->getParts()) {
+            Log::info('Processing multipart part recursively', [
+                'mime_type' => $part->getMimeType(),
+                'sub_parts_count' => count($part->getParts())
+            ]);
+            foreach ($part->getParts() as $subPart) {
+                $subResult = $this->extractGmailBodyFromPart($subPart);
+                if (!empty($subResult['plain_text'])) {
+                    $plainText = $subResult['plain_text'];
+                }
+                if (!empty($subResult['html_content'])) {
+                    $htmlContent = $subResult['html_content'];
+                }
+            }
+        } else {
+            // Handle text content
+            if ($part->getBody()->getData()) {
+                $content = $this->base64url_decode($part->getBody()->getData());
+                if ($part->getMimeType() === 'text/html') {
+                    $htmlContent = $content;
+                    $plainText = strip_tags($content);
+                    Log::info('Found HTML content in part', [
+                        'content_length' => strlen($content),
+                        'plain_text_length' => strlen($plainText)
+                    ]);
+                } elseif ($part->getMimeType() === 'text/plain') {
+                    $plainText = $content;
+                    Log::info('Found plain text content in part', [
+                        'content_length' => strlen($content)
+                    ]);
+                }
+            }
         }
 
         return [
@@ -503,15 +578,26 @@ class EmailService
         $contentType = $body['contentType'] ?? 'text';
         
         if ($contentType === 'html') {
-            return [
-                'plain_text' => strip_tags($content),
-                'html_content' => $content
-            ];
+            $plainText = strip_tags($content);
+            $htmlContent = $content;
+        } else {
+            $plainText = $content;
+            $htmlContent = '';
+        }
+        
+        // If we have HTML but no plain text, create plain text from HTML
+        if (empty($plainText) && !empty($htmlContent)) {
+            $plainText = strip_tags($htmlContent);
+        }
+        
+        // If we still have no content, provide a default message
+        if (empty($plainText) && empty($htmlContent)) {
+            $plainText = '[Email contains only attachments or images]';
         }
         
         return [
-            'plain_text' => $content,
-            'html_content' => ''
+            'plain_text' => $plainText,
+            'html_content' => $htmlContent
         ];
     }
 
@@ -613,12 +699,25 @@ class EmailService
 
     protected function processEmail(EmailAccount $emailAccount, Message $message): void
     {
+        $body = $message->getTextBody() ?? strip_tags($message->getHTMLBody() ?? '');
+        $htmlContent = $message->getHTMLBody() ?? '';
+        
+        // If we have HTML but no plain text, create plain text from HTML
+        if (empty($body) && !empty($htmlContent)) {
+            $body = strip_tags($htmlContent);
+        }
+        
+        // If we still have no content, provide a default message
+        if (empty($body) && empty($htmlContent)) {
+            $body = '[Email contains only attachments or images]';
+        }
+        
         $emailData = [
             'from_email' => $message->getFrom()[0]->mail ?? '',
             'from_name' => $message->getFrom()[0]->personal ?? '',
             'subject' => $message->getSubject() ?? '',
-            'body' => $message->getTextBody() ?? strip_tags($message->getHTMLBody() ?? ''),
-            'html_content' => $message->getHTMLBody() ?? '',
+            'body' => $body,
+            'html_content' => $htmlContent,
             'to_emails' => $message->getTo() ? array_map(function ($to) { return $to->mail; }, $message->getTo()) : [],
             'cc_emails' => $message->getCc() ? array_map(function ($cc) { return $cc->mail; }, $message->getCc()) : [],
             'attachments' => $this->extractAttachments($message),
